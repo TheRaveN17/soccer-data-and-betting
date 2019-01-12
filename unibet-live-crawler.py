@@ -1,8 +1,13 @@
 ''' Live crawler for unibet'''
 import requests
 
-class UnibetCrawler(object):
+from threading import Thread
 
-    def __init__(self):
+class UnibetCrawler(Thread):
+
+    def __init__(self, sport, database):
+        super().__init__()
 
         self._session = requests.Session()
+        self._sport = sport
+        self._database = database
