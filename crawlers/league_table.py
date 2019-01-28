@@ -33,22 +33,24 @@ class SoccerStatsCrawler(object):
 
         return session
 
-    def get_teams(self, league_url: str) -> set:
+    def get_league_data(self, league: dict) -> dict:
         """
         :return: all links to all teams' stats from present league
         """
 
-        resp = self._session.get(url=league_url)
+        resp = self._session.get(url=league['url'])
+
         all_hrefs = re.findall('&nbsp;<a href=\'(.*)\' title=', resp.text)
         teams_urls = set()
         for href in all_hrefs:
             teams_urls.add('https://www.soccerstats.com/' + href)
+        league['teams'] = list(teams_urls)
 
-        return teams_urls
+        return league
 
     def get_leagues(self) -> list:
         """
-        :return: all leagues and urls to their stats
+        :return: all leagues
         league['name'] = name of the league
         league['country'] = country of provenience
         league['url'] = url to be accessed for stats
@@ -83,8 +85,8 @@ class SoccerStatsCrawler(object):
 def main():
 
     crawler = SoccerStatsCrawler()
-    #teams_urls = crawler.get_teams_urls()
-    leagues_urls = crawler.get_leagues()
+    leagues = crawler.get_leagues()
+    crawler.get_league_data(leagues[8])
 
 
 if __name__ == '__main__':
