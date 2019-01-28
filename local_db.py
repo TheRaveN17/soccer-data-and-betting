@@ -4,6 +4,7 @@ import time
 import cons
 
 from datetime import datetime
+from fuzzywuzzy import fuzz
 
 
 class Sportsbook(object):
@@ -47,7 +48,7 @@ class Sportsbook(object):
                 return event
         event_id = uuid.uuid4().hex
         self.db[event_id] = dict()
-        self.db[event_id][cons.HOME_TEAM] =
+        self.db[event_id][cons.HOME_TEAM] = player_1
         self.db[event_id][cons.AWAY_TEAM] = player_2
         self.db[event_id][cons.SPORT] = sport
 
