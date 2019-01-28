@@ -2,7 +2,7 @@ import requests
 import re
 
 from arrow import utcnow
-
+from bs4 import BeautifulSoup
 
 
 class SoccerStatsCrawler(object):
@@ -12,7 +12,6 @@ class SoccerStatsCrawler(object):
         super().__init__()
 
         self._session = self._new_session()
-        self._league = 'england'
 
     @staticmethod
     def _new_session():
@@ -34,19 +33,46 @@ class SoccerStatsCrawler(object):
 
         return session
 
-    def get_teams_url(self):
+    def get_teams(self, league_url: str) -> set:
         """
         :return: all links to all teams' stats from present league
         """
 
-        url = 'https://www.soccerstats.com/latest.asp?league=%s' % self._league
-        resp = self._session.get(url=url)
+        resp = self._session.get(url=league_url)
         all_hrefs = re.findall('&nbsp;<a href=\'(.*)\' title=', resp.text)
         teams_urls = set()
         for href in all_hrefs:
             teams_urls.add('https://www.soccerstats.com/' + href)
 
         return teams_urls
+
+    def get_leagues(self) -> list:
+        """
+        :return: all leagues and urls to their stats
+        league['name'] = name of the league
+        league['country'] = country of provenience
+        league['url'] = url to be accessed for stats
+        """
+
+        url = 'https://www.soccerstats.com/'
+        resp = self._session.get(url=url)
+        soup = BeautifulSoup(resp.content, 'lxml')
+        pick_form = soup.find('form', {'name': 'MenuList'})
+        raw_data = pick_form.find_all('optgroup')
+        all_leagues = list()
+        for data in raw_data:
+            country = data.attrs['label']
+            if country == 'Favourite leagues':
+                continue
+            leagues = data.find_all('option')
+            for league in leagues:
+                new_league = dict()
+                new_league['country'] = country
+                new_league['name'] = league.contents[0]
+                new_league['url'] = 'https://www.soccerstats.com/' + league.attrs['value']
+                all_leagues.append(new_league)
+
+        return all_leagues
 
 
 
@@ -57,8 +83,8 @@ class SoccerStatsCrawler(object):
 def main():
 
     crawler = SoccerStatsCrawler()
-    teams_url = crawler.get_teams_url()
-    print(teams_url)
+    #teams_urls = crawler.get_teams_urls()
+    leagues_urls = crawler.get_leagues()
 
 
 if __name__ == '__main__':
