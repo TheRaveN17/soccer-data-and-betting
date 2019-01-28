@@ -1,43 +1,64 @@
 import requests
+import re
 
-from bs4 import BeautifulSoup
 from arrow import utcnow
 
 
-def getCookie (session, name, value, expdays):
 
-    expires = utcnow() + expdays * 24 * 60 *60
+class SoccerStatsCrawler(object):
+
+    def __init__(self):
+
+        super().__init__()
+
+        self._session = self._new_session()
+        self._league = 'england'
+
+    @staticmethod
+    def _new_session():
+        """
+        :return: a new requests.Session() object configured to work with https://www.soccerstats.com/
+        """
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:64.0) Gecko/20100101 Firefox/64.0',
+            'Pragma': 'no-cache',
+            'Host': 'www.soccerstats.com'
+        }
+        session = requests.Session()
+        session.headers.update(headers)
+        session.cookies.set(name='cookiesok',
+                            value='no',
+                            domain='www.soccerstats.com',
+                            expires=utcnow().timestamp + 365 * 24 * 60 * 60)
+
+        return session
+
+    def get_teams_url(self):
+        """
+        :return: all links to all teams' stats from present league
+        """
+
+        url = 'https://www.soccerstats.com/latest.asp?league=%s' % self._league
+        resp = self._session.get(url=url)
+        all_hrefs = re.findall('&nbsp;<a href=\'(.*)\' title=', resp.text)
+        teams_urls = set()
+        for href in all_hrefs:
+            teams_urls.add('https://www.soccerstats.com/' + href)
+
+        return teams_urls
+
+
+
+
+
 
 
 def main():
 
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:64.0) Gecko/20100101 Firefox/64.0',
-        'Pragma': 'no-cache'
-    }
-    session = requests.Session()
-    session.headers.update(headers)
-
-    url = 'https://www.soccerstats.com/'
-    resp = session.get(url=url)
-    session.cookies.set(name='cookiesok',
-                        value='no',
-                        domain='www.soccerstats.com',
-                        expires=utcnow().timestamp + 365*24*60*60)
-    # session.cookies.set(name='tz',
-    #                     value='120',
-    #                     domain='www.soccerstats.com')
-
-    #url = 'https://www.soccerstats.com/team_statitems.asp'
-    url = 'https://www.soccerstats.com/latest.asp?league=england'
-    headers = {
-        'Host': 'www.soccerstats.com',
-        'Referer' : 'https://www.soccerstats.com/'
-    }
-    resp = session.get(url=url, headers=headers)
-    soup = BeautifulSoup(resp.content, features='lxml')
-    all_teams_href = soup.find_all('tr', {'class': 'trow3'})
-    print(all_teams_href)
+    crawler = SoccerStatsCrawler()
+    teams_url = crawler.get_teams_url()
+    print(teams_url)
 
 
 if __name__ == '__main__':
