@@ -33,20 +33,18 @@ class SoccerStatsCrawler(object):
 
         return session
 
-    def get_league_data(self, league: dict) -> dict:
+    def get_teams(self, league: dict) -> list:
         """
-        :return: all links to all teams' stats from present league
+        :return: all links to all teams' stats from league
         """
 
         resp = self._session.get(url=league['url'])
-
         all_hrefs = re.findall('&nbsp;<a href=\'(.*)\' title=', resp.text)
         teams_urls = set()
         for href in all_hrefs:
             teams_urls.add('https://www.soccerstats.com/' + href)
-        league['teams'] = list(teams_urls)
 
-        return league
+        return list(teams_urls)
 
     def get_leagues(self) -> list:
         """
@@ -76,6 +74,23 @@ class SoccerStatsCrawler(object):
 
         return all_leagues
 
+    def get_seasons(self, league: dict) -> list:
+        """
+        :param league: the league to be checked
+        :return: all seasons' urls to be checked for stats; first one in list is the most recent
+        """
+
+        resp = self._session.get(url=league['url'])
+        soup = BeautifulSoup(resp.content, 'lxml')
+        seasons = soup.find('div', {'class': 'dropdown-content'})
+        seasons = seasons.find_all('a')
+        seasons_urls = list()
+        for season in seasons:
+            seasons_urls.append('https://www.soccerstats.com/' + season.attrs['href'])
+
+
+        return seasons_urls
+
 
 
 
@@ -86,7 +101,7 @@ def main():
 
     crawler = SoccerStatsCrawler()
     leagues = crawler.get_leagues()
-    crawler.get_league_data(leagues[8])
+    crawler.get_seasons(leagues[8])
 
 
 if __name__ == '__main__':
