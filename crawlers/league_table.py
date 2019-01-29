@@ -90,7 +90,7 @@ class SoccerStatsCrawler(object):
         return all_leagues
 
     def analyze_leagues(self, leagues: list) -> list:
-        """
+        """Crawls all seasons and teams in each season
         :param leagues: each league a dict
         :return: data collected for leagues as dicts
         """
@@ -98,15 +98,17 @@ class SoccerStatsCrawler(object):
             league_mpg = self._session.get(url=league['url'])
             league['seasons'] = self._get_seasons(league_mpg=league_mpg)
 
-            # for season in league['seasons']:
-            #     season_mpg = self._session.get(url=season)
-            #     league[season]['teams_urls'] = self._get_teams(season_mpg=season_mpg)
+            for season in league['seasons']:
+                season_mpg = self._session.get(url=season['url'])
+                season['teams'] = self._get_teams(season_mpg=season_mpg)
+
+        log.info('successfully retrieved all seasons and teams')
 
         return leagues
 
     @staticmethod
     def _get_seasons(league_mpg: requests.Response) -> list:
-        """
+        """ Retrieves all seasons for a league
         :param league_mpg: the response of the request to this league's url
         :return: all seasons' urls to be checked for stats; first one in list is the most recent
         """
@@ -127,9 +129,8 @@ class SoccerStatsCrawler(object):
             #only current year data
             season = dict()
             season['url'] = soup.find('meta', {'property': 'og:url'}).attrs['content']
-            season['year'] = '2018/2019'
+            season['year'] = cons.CURRENT_SEASON
             seasons.append(season)
-
 
         return seasons
 
@@ -137,14 +138,23 @@ class SoccerStatsCrawler(object):
     def _get_teams(season_mpg: requests.Response) -> list:
         """ Gets all teams that played in this season
         :param season_mpg: the response of the request to this season's url
-        :return: all links to all teams' stats from league
+        :return: all teams as dicts with name and url
         """
-        all_hrefs = re.findall('&nbsp;<a href=\'(.*)\' title=', season_mpg.text)
-        teams_urls = set()
+        all_teams = list()
+        all_hrefs = re.findall('nbsp;<a href=\'(.*)\' target=\'_top\'>(.*)</a>', season_mpg.text)
         for href in all_hrefs:
-            teams_urls.add('https://www.soccerstats.com/' + href)
+            team = dict()
+            team['name'] = href[1]
+            if '.' in team['name']:  # without abbreviations is better
+                continue
+            if 'title' in href[0]:  # format for current season main page
+                team['url'] = 'https://www.soccerstats.com/%s' % href[0].split('\' title')[0].strip()
+            else:  # format for previous seasons main page
+                team['url'] = href[0]
+            if team not in all_teams:
+                all_teams.append(team)
 
-        return list(teams_urls)
+        return all_teams
 
 
 
