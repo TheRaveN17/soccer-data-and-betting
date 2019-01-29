@@ -14,7 +14,7 @@ class SoccerStatsCrawler(object):
         self._session = self._new_session()
 
     @staticmethod
-    def _new_session():
+    def _new_session() -> requests.Session:
         """
         :return: a new requests.Session() object configured to work with https://www.soccerstats.com/
         """
@@ -32,19 +32,6 @@ class SoccerStatsCrawler(object):
                             expires=utcnow().timestamp + 365 * 24 * 60 * 60)
 
         return session
-
-    def get_teams(self, league: dict) -> list:
-        """
-        :return: all links to all teams' stats from league
-        """
-
-        resp = self._session.get(url=league['url'])
-        all_hrefs = re.findall('&nbsp;<a href=\'(.*)\' title=', resp.text)
-        teams_urls = set()
-        for href in all_hrefs:
-            teams_urls.add('https://www.soccerstats.com/' + href)
-
-        return list(teams_urls)
 
     def get_leagues(self) -> list:
         """
@@ -74,24 +61,64 @@ class SoccerStatsCrawler(object):
 
         return all_leagues
 
-    def get_seasons(self, league: dict) -> list:
+    def analyze_leagues(self, leagues: list) -> list:
         """
-        :param league: the league to be checked
+        :param leagues: each league a dict
+        :return: data collected for leagues as dicts
+        """
+
+        for league in leagues:
+            league_mpg = self._session.get(url=league['url'])
+            league['seasons'] = self._get_seasons(league_mpg=league_mpg)
+
+            for season in league['seasons']:
+                season_mpg = self._session.get(url=season)
+                league[season]['teams_urls'] = self._get_teams(season_mpg=season_mpg)
+
+        return leagues
+
+    @staticmethod
+    def _get_seasons(league_mpg: requests.Response) -> list:
+        """
+        :param league_mpg: the response of the request to this league's url
         :return: all seasons' urls to be checked for stats; first one in list is the most recent
         """
 
-        resp = self._session.get(url=league['url'])
-        soup = BeautifulSoup(resp.content, 'lxml')
-        seasons = soup.find('div', {'class': 'dropdown-content'})
-        seasons = seasons.find_all('a')
-        seasons_urls = list()
-        for season in seasons:
-            seasons_urls.append('https://www.soccerstats.com/' + season.attrs['href'])
+        soup = BeautifulSoup(league_mpg.content, 'lxml')
+        seasons_raw = soup.find('div', {'class': 'dropdown-content'})
+        seasons_raw = seasons_raw.find_all('a')
+
+        seasons = list()
+        for season_raw in seasons_raw:
+            season = dict()
+            season['url'] = 'https://www.soccerstats.com/' + season_raw.attrs['href']
+            if 'latest' not in season['url']:
+                continue
+            season['name'] = season_raw.attrs['href']
+            seasons.append(season)
+
+        if not seasons:
+            #only current year data
+            season = dict()
+            season['url'] = soup.find('meta', {'property': 'og:url'}).attrs['content']
+            seasons.append(season)
 
 
-        return seasons_urls
+        return seasons
 
+    @staticmethod
+    def _get_teams(season_mpg: requests.Response) -> list:
+        """
+        :param league_mpg: the response of the request to this league's url
+        :return: all links to all teams' stats from league
+        """
 
+        all_hrefs = re.findall('&nbsp;<a href=\'(.*)\' title=', season_mpg.text)
+        teams_urls = set()
+        for href in all_hrefs:
+            teams_urls.add('https://www.soccerstats.com/' + href)
+
+        return list(teams_urls)
 
 
 
@@ -101,7 +128,7 @@ def main():
 
     crawler = SoccerStatsCrawler()
     leagues = crawler.get_leagues()
-    crawler.get_seasons(leagues[8])
+    crawler.analyze_leagues(leagues[28: 30])
 
 
 if __name__ == '__main__':
