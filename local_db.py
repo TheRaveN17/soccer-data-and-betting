@@ -1,10 +1,10 @@
-import uuid
 import time
-
-import cons
-
+import uuid
 from datetime import datetime
+
 from fuzzywuzzy import fuzz
+
+from utils import cons
 
 
 class Sportsbook(object):

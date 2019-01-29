@@ -1,8 +1,11 @@
-import requests
 import re
+import requests
 
 from arrow import utcnow
 from bs4 import BeautifulSoup
+
+from utils import cons
+from utils import session
 
 
 class SoccerStatsCrawler(object):
@@ -20,18 +23,17 @@ class SoccerStatsCrawler(object):
         """
 
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:64.0) Gecko/20100101 Firefox/64.0',
+            cons.USER_AGENT_TAG: cons.USER_AGENT_CRAWL,
             'Pragma': 'no-cache',
             'Host': 'www.soccerstats.com'
         }
-        session = requests.Session()
-        session.headers.update(headers)
-        session.cookies.set(name='cookiesok',
+        ses = session.SessionFactory().build(headers=headers)
+        ses.cookies.set(name='cookiesok',
                             value='no',
                             domain='www.soccerstats.com',
                             expires=utcnow().timestamp + 365 * 24 * 60 * 60)
 
-        return session
+        return ses
 
     def get_leagues(self) -> list:
         """
