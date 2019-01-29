@@ -2,28 +2,17 @@ import socket
 import uuid
 import requests
 
-from utils import countries
-from utils import logger
-
-
-log = logger.get_logger(name='session.log')
-
-
 
 class SessionFactory(object):
 
-    def build(self, headers: dict, proxy: bool=False, country: str=None):
+    def build(self, headers: dict, proxy: bool=False, country_code: str=None) -> requests.Session:
         """Configures and returns a session object.
         :param headers: desired headers for the new session object
         :param proxy: set this to True if you want to use a proxy
                       if is True, country parameter also has to be passed
-        :param country: name of desired proxy's origin, exp >> Poland
+        :param country_code: two-letter iso code of desired proxy's origin, exp >> pl
         """
         if proxy:
-            country_code = countries.get_country_alpha2(country)
-            if not country_code:
-                log.error('%s country name is wrong' % country)
-                return None
             proxy_url = self._get_proxy_url(country_code)
             session = self._build(headers=headers, http_proxy=proxy_url, https_proxy=proxy_url)
         else:
@@ -45,7 +34,8 @@ class SessionFactory(object):
         }
         session = requests.Session()
         session.headers.update(headers)
-        session.proxies.update(proxies)
+        if http_proxy and https_proxy:
+            session.proxies.update(proxies)
         return session
 
     @staticmethod

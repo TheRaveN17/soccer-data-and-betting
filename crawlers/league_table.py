@@ -6,43 +6,62 @@ from bs4 import BeautifulSoup
 
 from utils import cons
 from utils import session
+from utils import countries
+from utils import logger
+
+log = logger.get_logger()
 
 
 class SoccerStatsCrawler(object):
 
-    def __init__(self):
-
+    def __init__(self, country_code: str=None):
+        """Initializes a crawler for www.soccerstats.com
+        :param country_code: the country_code for the proxy if one is desired
+        """
         super().__init__()
 
-        self._session = self._new_session()
+        if country_code:
+            try:
+                countries.get_country_name(country_code)
+                self._session = self._new_session(country_code=country_code)
+            except KeyError:
+                log.error('bad country_code: %s' % country_code)
+                raise SystemExit
+        else:
+            self._session = self._new_session()
+
+        log.info('successfully initialized SoccerStats crawler object')
 
     @staticmethod
-    def _new_session() -> requests.Session:
+    def _new_session(country_code: str=None) -> requests.Session:
         """
         :return: a new requests.Session() object configured to work with https://www.soccerstats.com/
         """
-
         headers = {
             cons.USER_AGENT_TAG: cons.USER_AGENT_CRAWL,
             'Pragma': 'no-cache',
             'Host': 'www.soccerstats.com'
         }
-        ses = session.SessionFactory().build(headers=headers)
+        if country_code:
+            ses = session.SessionFactory().build(headers=headers, proxy=True, country_code=country_code)
+        else:
+            ses = session.SessionFactory().build(headers=headers)
         ses.cookies.set(name='cookiesok',
                             value='no',
                             domain='www.soccerstats.com',
                             expires=utcnow().timestamp + 365 * 24 * 60 * 60)
 
+        log.info('successfully created new session')
+
         return ses
 
     def get_leagues(self) -> list:
-        """
+        """Creates a list with all leagues on www.soccerstats.com
         :return: all leagues
         league['name'] = name of the league
         league['country'] = country of provenience
         league['url'] = url to be accessed for stats
         """
-
         url = 'https://www.soccerstats.com/'
         resp = self._session.get(url=url)
         soup = BeautifulSoup(resp.content, 'lxml')
@@ -68,7 +87,6 @@ class SoccerStatsCrawler(object):
         :param leagues: each league a dict
         :return: data collected for leagues as dicts
         """
-
         for league in leagues:
             league_mpg = self._session.get(url=league['url'])
             league['seasons'] = self._get_seasons(league_mpg=league_mpg)
@@ -85,7 +103,6 @@ class SoccerStatsCrawler(object):
         :param league_mpg: the response of the request to this league's url
         :return: all seasons' urls to be checked for stats; first one in list is the most recent
         """
-
         soup = BeautifulSoup(league_mpg.content, 'lxml')
         seasons_raw = soup.find('div', {'class': 'dropdown-content'})
         seasons_raw = seasons_raw.find_all('a')
@@ -110,11 +127,10 @@ class SoccerStatsCrawler(object):
 
     @staticmethod
     def _get_teams(season_mpg: requests.Response) -> list:
-        """
-        :param league_mpg: the response of the request to this league's url
+        """ Gets all teams that played in this season
+        :param season_mpg: the response of the request to this season's url
         :return: all links to all teams' stats from league
         """
-
         all_hrefs = re.findall('&nbsp;<a href=\'(.*)\' title=', season_mpg.text)
         teams_urls = set()
         for href in all_hrefs:
@@ -128,7 +144,7 @@ class SoccerStatsCrawler(object):
 
 def main():
 
-    crawler = SoccerStatsCrawler()
+    crawler = SoccerStatsCrawler(country_code='gb')
     leagues = crawler.get_leagues()
     crawler.analyze_leagues(leagues[28: 30])
 
