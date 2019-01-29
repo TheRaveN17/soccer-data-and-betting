@@ -57,13 +57,18 @@ class SoccerStatsCrawler(object):
 
     def get_leagues(self) -> list:
         """Creates a list with all leagues on www.soccerstats.com
-        :return: all leagues
+        :return: all leagues or empty list if connection failed
         league['name'] = name of the league
         league['country'] = country of provenience
         league['url'] = url to be accessed for stats
         """
         url = 'https://www.soccerstats.com/'
-        resp = self._session.get(url=url)
+        try:
+            resp = self._session.get(url=url)
+        except ConnectionError as err:
+            log.error(err)
+            log.error('problems connecting to %s\n...ABORTING...' % url)
+            return []
         soup = BeautifulSoup(resp.content, 'lxml')
         pick_form = soup.find('form', {'name': 'MenuList'})
         raw_data = pick_form.find_all('optgroup')
@@ -80,6 +85,8 @@ class SoccerStatsCrawler(object):
                 new_league['url'] = 'https://www.soccerstats.com/' + league.attrs['value']
                 all_leagues.append(new_league)
 
+        log.info('successfully retrieved all leagues')
+
         return all_leagues
 
     def analyze_leagues(self, leagues: list) -> list:
@@ -91,9 +98,9 @@ class SoccerStatsCrawler(object):
             league_mpg = self._session.get(url=league['url'])
             league['seasons'] = self._get_seasons(league_mpg=league_mpg)
 
-            for season in league['seasons']:
-                season_mpg = self._session.get(url=season)
-                league[season]['teams_urls'] = self._get_teams(season_mpg=season_mpg)
+            # for season in league['seasons']:
+            #     season_mpg = self._session.get(url=season)
+            #     league[season]['teams_urls'] = self._get_teams(season_mpg=season_mpg)
 
         return leagues
 
@@ -113,13 +120,14 @@ class SoccerStatsCrawler(object):
             season['url'] = 'https://www.soccerstats.com/' + season_raw.attrs['href']
             if 'latest' not in season['url']:
                 continue
-            season['name'] = season_raw.attrs['href']
+            season['year'] = season_raw.contents[0]
             seasons.append(season)
 
         if not seasons:
             #only current year data
             season = dict()
             season['url'] = soup.find('meta', {'property': 'og:url'}).attrs['content']
+            season['year'] = '2018/2019'
             seasons.append(season)
 
 
@@ -146,7 +154,7 @@ def main():
 
     crawler = SoccerStatsCrawler(country_code='gb')
     leagues = crawler.get_leagues()
-    crawler.analyze_leagues(leagues[28: 30])
+    crawler.analyze_leagues(leagues[21: 30])
 
 
 if __name__ == '__main__':
