@@ -40,12 +40,11 @@ class SoccerStatsCrawler(object):
         league['country'] = country of provenience
         league['url'] = url to be accessed for stats
         """
-        url = 'https://www.soccerstats.com/'
         try:
-            resp = self._session.get(url=url)
+            resp = self._session.get(url=cons.SOCCER_STATS_URL)
         except ConnectionError as err:
             log.error(err)
-            log.error('problems connecting to %s\n...ABORTING...' % url)
+            log.error('problems connecting to %s\n...ABORTING...' % cons.SOCCER_STATS_URL)
             return []
         soup = BeautifulSoup(resp.content, 'lxml')
         pick_form = soup.find('form', {'name': 'MenuList'})
@@ -60,7 +59,7 @@ class SoccerStatsCrawler(object):
                 new_league = dict()
                 new_league['country'] = country
                 new_league['name'] = league.contents[0]
-                new_league['url'] = 'https://www.soccerstats.com/' + league.attrs['value']
+                new_league['url'] = cons.SOCCER_STATS_URL + league.attrs['value']
                 all_leagues.append(new_league)
 
         log.info('successfully retrieved all leagues')
@@ -158,7 +157,7 @@ class SoccerStatsCrawler(object):
         seasons = list()
         for season_raw in seasons_raw:
             season = dict()
-            season['url'] = 'https://www.soccerstats.com/' + season_raw.attrs['href']
+            season['url'] = cons.SOCCER_STATS_URL + season_raw.attrs['href']
             if 'latest' not in season['url']:
                 continue
             season['year'] = season_raw.contents[0]
@@ -187,7 +186,7 @@ class SoccerStatsCrawler(object):
             if '.' in team['name']:  # without abbreviations is better
                 continue
             if 'title' in href[0]:  # format for current season main page
-                team['url'] = 'https://www.soccerstats.com/%s' % href[0].split('\' title')[0].strip()
+                team['url'] = cons.SOCCER_STATS_URL + href[0].split('\' title')[0].strip()
             else:  # format for previous seasons main page
                 team['url'] = href[0]
             if team not in all_teams:

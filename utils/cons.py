@@ -10,3 +10,4 @@ USER_AGENT_CRAWL = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:64.0) Gecko/201
 #crawler related constants
 CURRENT_SEASON = '2018/2019'
 WORKERS = 20
+SOCCER_STATS_URL = 'https://www.soccerstats.com/'
