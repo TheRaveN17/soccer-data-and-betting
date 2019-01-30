@@ -3,6 +3,7 @@ import requests
 
 from arrow import utcnow
 from bs4 import BeautifulSoup
+from requests_futures.sessions import FuturesSession
 
 from utils import cons
 from utils import session
@@ -31,29 +32,6 @@ class SoccerStatsCrawler(object):
             self._session = self._new_session()
 
         log.info('successfully initialized SoccerStats crawler object')
-
-    @staticmethod
-    def _new_session(country_code: str=None) -> requests.Session:
-        """
-        :return: a new requests.Session() object configured to work with https://www.soccerstats.com/
-        """
-        headers = {
-            cons.USER_AGENT_TAG: cons.USER_AGENT_CRAWL,
-            'Pragma': 'no-cache',
-            'Host': 'www.soccerstats.com'
-        }
-        if country_code:
-            ses = session.SessionFactory().build(headers=headers, proxy=True, country_code=country_code)
-        else:
-            ses = session.SessionFactory().build(headers=headers)
-        ses.cookies.set(name='cookiesok',
-                            value='no',
-                            domain='www.soccerstats.com',
-                            expires=utcnow().timestamp + 365 * 24 * 60 * 60)
-
-        log.info('successfully created new session')
-
-        return ses
 
     def get_leagues(self) -> list:
         """Creates a list with all leagues on www.soccerstats.com
@@ -91,20 +69,81 @@ class SoccerStatsCrawler(object):
 
     def analyze_leagues(self, leagues: list) -> list:
         """Crawls all seasons and teams in each season
-        :param leagues: each league a dict
+        :param leagues: dicts
         :return: data collected for leagues as dicts
         """
-        for league in leagues:
-            league_mpg = self._session.get(url=league['url'])
-            league['seasons'] = self._get_seasons(league_mpg=league_mpg)
+        leagues_mp = self._crawl_leagues(leagues=leagues)
+        for index in range(len(leagues)):
+            leagues[index]['seasons'] = self._get_seasons(league_mpg=leagues_mp[index])
 
+        seasons_mpgs = self._crawl_seasons(leagues=leagues)
+        index = 0
+        for league in leagues:
             for season in league['seasons']:
-                season_mpg = self._session.get(url=season['url'])
-                season['teams'] = self._get_teams(season_mpg=season_mpg)
+                season['teams'] = self._get_teams(seasons_mpgs[index])
+                index += 1
 
         log.info('successfully retrieved all seasons and teams')
 
         return leagues
+
+    def _crawl_leagues(self, leagues: list) -> list:
+        """Crawls all leagues' main pages
+        :param leagues: dicts
+        :return: list of Response objects
+        """
+        leagues_urls = list()
+        for league in leagues:
+            leagues_urls.append(league['url'])
+
+        try:
+            leagues_mp = self._crawl(urls=leagues_urls, session=self._session)
+        except Exception as err:
+            log.error('failed to retrieve all leagues\' main pages')
+            log.error(err)
+            raise SystemExit
+
+        log.info('successfully retrieved all leagues\' main pages')
+
+        return leagues_mp
+
+    def _crawl_seasons(self, leagues: list) -> list:
+        """Crawls all seasons' (in leagues) main pages
+        :param leagues: dicts
+        :return: list of Response objects
+        """
+        season_urls = list()
+        for league in leagues:
+            for season in league['seasons']:
+                season_urls.append(season['url'])
+
+        try:
+            seasons_mpgs = self._crawl(urls=season_urls, session=self._session)
+        except Exception as err:
+            log.error('failed to retrieve all seasons\' main pages')
+            log.error(err)
+            raise SystemExit
+
+        log.info('successfully retrieved all seasons\' main pages')
+
+        return seasons_mpgs
+
+    @staticmethod
+    def _crawl(urls: list, session: requests.Session) -> list:
+        """Crawls faster using requests_futures lib
+        :param urls: urls to be crawled
+        :return: Response objects
+        """
+        future = list()
+        result = list()
+        ses = FuturesSession(session=session, max_workers=cons.WORKERS)
+
+        for url in urls:
+            future.append(ses.get(url=url))
+        for resp in future:
+            result.append(resp.result())
+
+        return result
 
     @staticmethod
     def _get_seasons(league_mpg: requests.Response) -> list:
@@ -156,6 +195,30 @@ class SoccerStatsCrawler(object):
 
         return all_teams
 
+    @staticmethod
+    def _new_session(country_code: str = None) -> requests.Session:
+        """
+        :return: a new requests.Session() object configured to work with https://www.soccerstats.com/
+        """
+        headers = {
+            cons.USER_AGENT_TAG: cons.USER_AGENT_CRAWL,
+            'Pragma': 'no-cache',
+            'Host': 'www.soccerstats.com'
+        }
+        if country_code:
+            ses = session.SessionFactory().build(headers=headers, proxy=True, country_code=country_code)
+        else:
+            ses = session.SessionFactory().build(headers=headers)
+        ses.cookies.set(name='cookiesok',
+                        value='no',
+                        domain='www.soccerstats.com',
+                        expires=utcnow().timestamp + 365 * 24 * 60 * 60)
+
+        log.info('successfully created new session')
+
+        return ses
+
+
 
 
 
@@ -164,7 +227,7 @@ def main():
 
     crawler = SoccerStatsCrawler(country_code='gb')
     leagues = crawler.get_leagues()
-    crawler.analyze_leagues(leagues[21: 30])
+    crawler.analyze_leagues(leagues[21: 50])
 
 
 if __name__ == '__main__':
