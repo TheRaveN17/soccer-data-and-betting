@@ -1,5 +1,8 @@
 import re
 import json
+import concurrent.futures as cf
+
+from urllib import parse
 
 import requests
 
@@ -61,18 +64,27 @@ class WhoScoredCrawler(object):
     def _crawl(urls: list, session: requests.Session) -> list:
         """Crawls faster using requests_futures lib
         :param urls: urls to be crawled
-        :return: Response objects
+        :return: sorted response objects
         """
-        future = list()
-        result = list()
+        futures = list()
+        unsorted_result = list()
+        sorted_result = list()
+        for i in range(0, len(urls)): #initialize list
+            sorted_result.append(i)
         ses = FuturesSession(session=session, max_workers=cons.WORKERS)
 
-        for url in urls:
-            future.append(ses.get(url=url))
-        for resp in future:
-            result.append(resp.result())
+        for i in range(0, len(urls)):
+            futures.append(ses.get(url=urls[i]))
+            urls[i] = urls[i].encode('utf-8')
+        for future in cf.as_completed(futures):
+            unsorted_result.append(future.result())
 
-        return result
+        for resp in unsorted_result:
+            url = parse.unquote_to_bytes(resp.request.url)
+            index = urls.index(url)
+            sorted_result[index] = resp
+
+        return sorted_result
 
     def get_leagues(self) -> list:
         """Creates a list with all leagues on whoscored.com
@@ -115,6 +127,38 @@ class WhoScoredCrawler(object):
 
         return leagues
 
+    def add_data(self, leagues: list) -> list:
+        """Crawls all seasons and teams in each season
+        :param leagues: dicts
+        :return: data collected for leagues as dicts
+        """
+        leagues_mp = self._crawl_leagues(leagues=leagues)
+        for index in range(len(leagues)):
+            leagues[index]['seasons'] = self._get_seasons(league_mpg=leagues_mp[index])
+
+        return leagues
+
+    def _crawl_leagues(self, leagues: list) -> list:
+        """Crawls all leagues' main pages
+        :param leagues: dicts
+        :return: list of Response objects
+        """
+        leagues_urls = list()
+        for league in leagues:
+            leagues_urls.append(league['url'])
+        try:
+            leagues_mp = self._crawl(urls=leagues_urls, session=self._session)
+        except Exception as err:
+            log.error('failed to retrieve all leagues\' main pages')
+            log.error(err)
+            raise SystemExit
+
+        log.info('successfully retrieved all leagues\' main pages')
+
+        return leagues_mp
+
+
+
 
 
 
@@ -122,7 +166,9 @@ class WhoScoredCrawler(object):
 def main():
 
     crawler = WhoScoredCrawler(country_code='gb')
-    leagues = crawler.get_leagues()
+    leagues = crawler.get_leagues()[30:100]
+    crawler.add_data(leagues=leagues)
+
 
 
 if __name__ == '__main__':
