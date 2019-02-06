@@ -8,6 +8,7 @@ import requests
 
 from arrow import utcnow
 from requests_futures.sessions import FuturesSession
+from bs4 import BeautifulSoup
 
 from utils import cons
 from utils import session
@@ -127,6 +128,15 @@ class WhoScoredCrawler(object):
 
         return leagues
 
+    @staticmethod
+    def select_leagues_by_region(leagues: list, region_name: str) -> list:
+        """Gets only leagues specific to a country or region
+        :param leagues: list of leagues as returned by crawler.get_leagues()
+        :param region_name: name of filter region (exp: Romania, only Liga 1, Liga2, etc.)
+        :return: list of filtered leagues
+        """
+        return list((lg for lg in leagues if lg['region'] == region_name))
+
     def add_data(self, leagues: list) -> list:
         """Crawls all seasons and teams in each season
         :param leagues: dicts
@@ -137,6 +147,26 @@ class WhoScoredCrawler(object):
             leagues[index]['seasons'] = self._get_seasons(league_mpg=leagues_mp[index])
 
         return leagues
+
+    @staticmethod
+    def _get_seasons(league_mpg: requests.Response) -> list:
+        """ Retrieves all seasons for a league
+        :param league_mpg: the response of the request to this league's url
+        :return: all seasons' urls to be checked for stats; sorted from most recent to last
+        """
+        soup = BeautifulSoup(league_mpg.content, 'lxml')
+        all_options = soup.find_all('option')
+
+        seasons = list()
+        for option in all_options:
+            if 'Seasons' not in option.attrs['value']:
+                continue
+            season = dict()
+            season['url'] = cons.WHOSCORED_URL + option.attrs['value'][1:]
+            season['year'] = option.contents[0]
+            seasons.append(season)
+
+        return seasons
 
     def _crawl_leagues(self, leagues: list) -> list:
         """Crawls all leagues' main pages
@@ -161,12 +191,11 @@ class WhoScoredCrawler(object):
 
 
 
-
-
 def main():
 
     crawler = WhoScoredCrawler(country_code='gb')
-    leagues = crawler.get_leagues()[30:100]
+    leagues = crawler.get_leagues()
+    leagues = crawler.select_leagues_by_region(leagues=leagues, region_name='Italy')
     crawler.add_data(leagues=leagues)
 
 
