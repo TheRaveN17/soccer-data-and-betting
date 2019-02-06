@@ -6,7 +6,6 @@ from urllib import parse
 
 import requests
 
-from arrow import utcnow
 from requests_futures.sessions import FuturesSession
 from bs4 import BeautifulSoup
 
@@ -138,35 +137,19 @@ class WhoScoredCrawler(object):
         return list((lg for lg in leagues if lg['region'] == region_name))
 
     def add_data(self, leagues: list) -> list:
-        """Crawls all seasons and teams in each season
+        """Crawls all seasons and teams in current season
         :param leagues: dicts
         :return: data collected for leagues as dicts
         """
         leagues_mp = self._crawl_leagues(leagues=leagues)
         for index in range(len(leagues)):
             leagues[index]['seasons'] = self._get_seasons(league_mpg=leagues_mp[index])
+            leagues[index]['stats_urls'] = self._get_stats_urls(league_mpg=leagues_mp[index])
+
+        for league in leagues:
+            league['teams'] = self._get_teams(league)
 
         return leagues
-
-    @staticmethod
-    def _get_seasons(league_mpg: requests.Response) -> list:
-        """ Retrieves all seasons for a league
-        :param league_mpg: the response of the request to this league's url
-        :return: all seasons' urls to be checked for stats; sorted from most recent to last
-        """
-        soup = BeautifulSoup(league_mpg.content, 'lxml')
-        all_options = soup.find_all('option')
-
-        seasons = list()
-        for option in all_options:
-            if 'Seasons' not in option.attrs['value']:
-                continue
-            season = dict()
-            season['url'] = cons.WHOSCORED_URL + option.attrs['value'][1:]
-            season['year'] = option.contents[0]
-            seasons.append(season)
-
-        return seasons
 
     def _crawl_leagues(self, leagues: list) -> list:
         """Crawls all leagues' main pages
@@ -186,6 +169,63 @@ class WhoScoredCrawler(object):
         log.info('successfully retrieved all leagues\' main pages')
 
         return leagues_mp
+
+    @staticmethod
+    def _get_seasons(league_mpg: requests.Response) -> dict:
+        """ Retrieves all seasons for a league
+        :param league_mpg: the response of the request to this league's url
+        :return: dict
+        dict[year] = url
+        """
+        soup = BeautifulSoup(league_mpg.content, 'lxml')
+        all_options = soup.find_all('option')
+
+        seasons = dict()
+        for option in all_options:
+            if 'Seasons' not in option.attrs['value']:
+                continue
+            seasons[option.contents[0]] = cons.WHOSCORED_URL + option.attrs['value'][1:]
+
+        return seasons
+
+    @staticmethod
+    def _get_stats_urls(league_mpg: requests.Response) -> dict:
+        """ Retrieves all useful urls for league (both teams and players)
+        :param league_mpg: the response of the request to this league's url
+        :return: dict
+        dict[teams] = url for teams' stats
+        dict[players] = dict for players' stats
+        """
+        urls = dict()
+        soup = BeautifulSoup(league_mpg.content, 'lxml')
+        try:
+            urls['teams'] = cons.WHOSCORED_URL + soup.find('a', {'id': 'link-statistics'}).attrs['href'][1:]
+            urls['players'] = cons.WHOSCORED_URL + soup.find('a', {'id': 'link-player-statistics'}).attrs['href'][1:]
+        except:
+            urls['teams'] = None
+            urls['players'] = None
+
+        return urls
+
+    def _get_teams(self, league: dict) -> list:
+        """ Gets all teams that are playing in this league
+        :param league: league to be checked
+        :return: all teams as dicts
+        """
+        all_teams = list()
+        params = {
+            'category': 'summaryteam',
+            'subcategory': 'all',
+            'statsAccumulationType': '0',
+            'field': 'Overall',
+            'tournamentOptions': '',
+            'timeOfTheGameStart': '',
+            'timeOfTheGameEnd': '',
+            'teamIds': '',
+            'stageId': ''
+        }
+
+        return all_teams
 
 
 
