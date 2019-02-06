@@ -75,13 +75,18 @@ class WhoScoredCrawler(object):
         return result
 
     def get_leagues(self) -> list:
-        """Creates a list with all leagues on www.whoscored.com
+        """Creates a list with all leagues on whoscored.com
+        league['type'] = 1 if Regional, 0 if National level
+        league['id'] = identification number for whoscored.com -> int
+        league['flag'] = identification flag for whoscored.com -> str
+        league['region'] = name of country or region of provenience
+        league['name'] = name
+        league['url'] = main page
         :return: all leagues or empty list if connection failed
         """
         try:
             resp = self._session.get(url=cons.WHOSCORED_URL)
-        except ConnectionError as err:
-            log.error(err)
+        except ConnectionError:
             log.error('problems connecting to %s\n...ABORTING...' % cons.WHOSCORED_URL)
             return []
 
@@ -91,10 +96,24 @@ class WhoScoredCrawler(object):
         var = re.sub('{', '{"', var)
         var = re.sub(':', '":', var)
         var = re.sub(', ', ', "', var)
-        all_leagues = json.loads(var)
+        regions = json.loads(var)
+
+        leagues = list()
+        for region in regions:
+            for tournament in region['tournaments']:
+                league = dict()
+                league['id'] = tournament['id']
+                league['url'] = cons.WHOSCORED_URL + tournament['url'][1:]
+                league['name'] = tournament['name'] if tournament['name'] else 'Name not provided. plly coupe'
+                league['region'] = region['name']
+                league['flag'] = region['flg']
+                league['type'] = region['type']
+                leagues.append(league)
+                continue
+
         log.info('successfully retrieved all leagues')
 
-        return all_leagues
+        return leagues
 
 
 
