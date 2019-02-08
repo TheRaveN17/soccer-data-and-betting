@@ -8,6 +8,7 @@ import requests
 
 from requests_futures.sessions import FuturesSession
 from bs4 import BeautifulSoup
+from arrow import utcnow
 
 from utils import cons
 from utils import session
@@ -31,11 +32,13 @@ class WhoScoredCrawler(object):
             try:
                 countries.get_country_name(country_code)
                 self._session = self._new_session(country_code=country_code)
+                self._country_code = country_code
             except KeyError:
                 log.error('bad country_code: %s' % country_code)
                 raise SystemExit
         else:
             self._session = self._new_session()
+        self._header_value = None
 
         log.info('successfully initialized WhoScored crawler object')
 
@@ -49,19 +52,24 @@ class WhoScoredCrawler(object):
             'Pragma': 'no-cache',
             'Host': 'www.whoscored.com',
             'TE': 'Trailers',
-            'Cache-Control': 'no-cache'
+            'Cache-Control': 'no-cache',
+            'Accept-Encoding': 'gzip, deflate, br'
         }
         if country_code:
             ses = session.SessionFactory().build(headers=headers, proxy=True, country_code=country_code)
         else:
             ses = session.SessionFactory().build(headers=headers)
+        ses.cookies.set(name='ct',
+                        value=country_code.upper(),
+                        domain='.whoscored.com',
+                        expires=utcnow().timestamp + 365 * 24 * 60 * 60,
+                        discard=False)
 
         log.info('successfully created new session')
 
         return ses
 
-    @staticmethod
-    def _crawl(urls: list, session: requests.Session) -> list:
+    def _crawl(self, urls: list) -> list:
         """Crawls faster using requests_futures lib
         :param urls: urls to be crawled
         :return: sorted response objects
@@ -71,18 +79,20 @@ class WhoScoredCrawler(object):
         sorted_result = list()
         for i in range(0, len(urls)): #initialize list
             sorted_result.append(i)
-        ses = FuturesSession(session=session, max_workers=cons.WORKERS)
+        ses = FuturesSession(session=self._session, max_workers=cons.WORKERS)
 
         for i in range(0, len(urls)):
             futures.append(ses.get(url=urls[i]))
             urls[i] = urls[i].encode('utf-8')
         for future in cf.as_completed(futures):
-            unsorted_result.append(future.result())
+            result = future.result()
+            unsorted_result.append(result)
 
         for resp in unsorted_result:
             url = parse.unquote_to_bytes(resp.request.url)
             index = urls.index(url)
             sorted_result[index] = resp
+        self._header_value = self._get_header_value(page=sorted_result[-1])
 
         return sorted_result
 
@@ -146,10 +156,15 @@ class WhoScoredCrawler(object):
             leagues[index]['seasons'] = self._get_seasons(league_mpg=leagues_mp[index])
             leagues[index]['stats_urls'] = self._get_stats_urls(league_mpg=leagues_mp[index])
 
-        for league in leagues:
-            league['teams'] = self._get_teams(league)
+        detailed_leagues = list()
+        for index in range(len(leagues)):
+            if not leagues[index]['stats_urls']:
+                continue
+            nl = leagues[index]
+            nl['teams'] = self._get_teams(leagues[index])
+            detailed_leagues.append(nl)
 
-        return leagues
+        return detailed_leagues
 
     def _crawl_leagues(self, leagues: list) -> list:
         """Crawls all leagues' main pages
@@ -160,7 +175,7 @@ class WhoScoredCrawler(object):
         for league in leagues:
             leagues_urls.append(league['url'])
         try:
-            leagues_mp = self._crawl(urls=leagues_urls, session=self._session)
+            leagues_mp = self._crawl(urls=leagues_urls)
         except Exception as err:
             log.error('failed to retrieve all leagues\' main pages')
             log.error(err)
@@ -202,8 +217,7 @@ class WhoScoredCrawler(object):
             urls['teams'] = cons.WHOSCORED_URL + soup.find('a', {'id': 'link-statistics'}).attrs['href'][1:]
             urls['players'] = cons.WHOSCORED_URL + soup.find('a', {'id': 'link-player-statistics'}).attrs['href'][1:]
         except:
-            urls['teams'] = None
-            urls['players'] = None
+            urls = None
 
         return urls
 
@@ -213,6 +227,7 @@ class WhoScoredCrawler(object):
         :return: all teams as dicts
         """
         all_teams = list()
+        stageId = re.findall('([0-9]{5})', league['stats_urls']['teams'])[0]
         params = {
             'category': 'summaryteam',
             'subcategory': 'all',
@@ -222,10 +237,35 @@ class WhoScoredCrawler(object):
             'timeOfTheGameStart': '',
             'timeOfTheGameEnd': '',
             'teamIds': '',
-            'stageId': ''
+            'stageId': stageId,
+            'sortBy': 'Rating',
+            'sortAscending': '',
+            'page': '',
+            'numberOfTeamsToPick': '',
+            'isCurrent': 'true',
+            'formation': ''
         }
+        headers = {'X-Requested-With': 'XMLHttpRequest', 'Model-last-Mode': self._header_value}
+        resp = self._session.get(url=cons.TEAM_STATS_URL, params=params, headers=headers)
+        resp = re.sub(' ', '', resp.content.decode('utf-8'))
+        resp = resp.split(',"paging')[0] #eliminate stats columns and paging vars
+        resp = resp.split('Stats":')[1]
+        resp = json.loads(resp)
+
+        for item in resp:
+            team = dict()
+            team['name'] = item['name']
+            team['id'] = item['teamId']
+            all_teams.append(team)
 
         return all_teams
+
+    @staticmethod
+    def _get_header_value(page: requests.Response) -> str:
+        """Returns the Model-last-Mode (fucked up name for a header)
+        :return: header value
+        """
+        return re.findall('\'Model-last-Mode\': \'(.*=)\' }', page.text)[0]
 
 
 
@@ -233,10 +273,10 @@ class WhoScoredCrawler(object):
 
 def main():
 
-    crawler = WhoScoredCrawler(country_code='gb')
+    crawler = WhoScoredCrawler(country_code='at')
     leagues = crawler.get_leagues()
     leagues = crawler.select_leagues_by_region(leagues=leagues, region_name='Italy')
-    crawler.add_data(leagues=leagues)
+    crawler.add_data(leagues=[leagues[0]])
 
 
 
