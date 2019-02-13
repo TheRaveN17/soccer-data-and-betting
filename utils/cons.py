@@ -13,3 +13,4 @@ WORKERS = 10
 SOCCER_STATS_URL = 'https://www.soccerstats.com/'
 WHOSCORED_URL = 'https://www.whoscored.com/'
 TEAM_STATS_URL = 'https://www.whoscored.com/StatisticsFeed/1/GetTeamStatistics'
+PLAYER_STATS_URL = 'https://www.whoscored.com/StatisticsFeed/1/GetPlayerStatistics'

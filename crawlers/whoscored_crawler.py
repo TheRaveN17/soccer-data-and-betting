@@ -155,7 +155,11 @@ class WhoScoredCrawler(object):
             if not leagues[index]['stats_urls']:
                 continue
             nl = leagues[index]
-            nl['teams'] = self._get_teams(leagues[index])
+            nl['teams'] = self._get_teams(league=leagues[index])
+
+            nl['players'] = list()
+            for team in nl['teams'][5: ]:
+                nl['players'] += self._get_players(team=team)
             detailed_leagues.append(nl)
 
         return detailed_leagues
@@ -258,12 +262,72 @@ class WhoScoredCrawler(object):
             team = dict()
             team['name'] = item['name']
             team['id'] = item['teamId']
+            team['leagueId'] = league['id']
             team['url'] = 'https://www.whoscored.com/Teams/{}/Show/{}-{}'.format(team['id'], item['teamRegionName'], team['name'])
             all_teams.append(team)
 
         log.info('succesfully retrieved all teams\' ids and urls for league %s' % league['name'])
 
         return all_teams
+
+    def _get_players(self, team: dict) -> list:
+        """ Gets all players currently in this team
+        :param team: team to be checked
+        :return: all players as dicts
+        """
+        all_players = list()
+
+        headers = {'Referer': cons.WHOSCORED_URL}
+        resp = self._session.get(url=team['url'], headers=headers)
+        model_last_mode = self._get_header_value(resp)
+
+        params = {
+            'category': 'summary',
+            'subcategory': 'all',
+            'statsAccumulationType': '0',
+            'isCurrent': 'true',
+            'playerId': '',
+            'teamIds': team['id'],
+            'matchId': '',
+            'stageId': '',
+            'tournamentOptions': team['leagueId'],
+            'sortBy': 'Rating',
+            'sortAscending': '',
+            'age': '',
+            'ageComparisonType': '',
+            'appearances': '',
+            'appearancesComparisonType': '',
+            'field': 'Overall',
+            'nationality': '',
+            'positionOptions': '',
+            'timeOfTheGameStart': '',
+            'timeOfTheGameEnd': '',
+            'isMinApp': 'false',
+            'page': '',
+            'includeZeroValues': 'true',
+            'numberOfPlayersToPick': ''
+        }
+        headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Model-last-Mode': model_last_mode,
+            'Referer': team['url']
+        }
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = re.sub(' ', '', resp.content.decode('utf-8'))
+        resp = resp.split(',"paging')[0]  # eliminate stats columns and paging vars
+        resp = resp.split('Stats":')[1]
+        resp = json.loads(resp)
+
+        for item in resp:
+            player = dict()
+            player['name'] = item['name']
+            player['id'] = item['playerId']
+            player['url'] = 'https://www.whoscored.com/Players/{}/Show/{}'.format(player['id'], player['name'])
+            all_players.append(player)
+
+        log.info('succesfully retrieved all players\' ids and urls for team %s' % team['name'])
+
+        return all_players
 
     @staticmethod
     def _get_header_value(page: requests.Response) -> str:
@@ -281,7 +345,7 @@ def main():
     crawler = WhoScoredCrawler(country_code='gb')
     leagues = crawler.get_leagues()
     leagues = crawler.select_leagues_by_region(leagues=leagues, region_name='Italy')
-    crawler.add_data(leagues=[leagues[0]])
+    detailed_leagues = crawler.add_data(leagues=[leagues[0]])
 
 
 
