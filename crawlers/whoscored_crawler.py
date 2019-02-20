@@ -12,9 +12,9 @@ from bs4 import BeautifulSoup
 from utils import cons
 from utils import session
 from utils import countries
-from utils import logger
+from utils import log
 
-log = logger.get_logger()
+logger = log.get_logger()
 
 
 
@@ -33,12 +33,12 @@ class WhoScoredCrawler(object):
                 self._session = self._new_session(country_code=country_code)
                 self._country_code = country_code
             except KeyError:
-                log.error('bad country_code: %s' % country_code)
+                logger.error('bad country_code: %s' % country_code)
                 raise SystemExit
         else:
             self._session = self._new_session()
 
-        log.info('successfully initialized WhoScored crawler object')
+        logger.info('successfully initialized WhoScored crawler object')
 
     @staticmethod
     def _new_session(country_code: str=None) -> requests.Session:
@@ -60,7 +60,7 @@ class WhoScoredCrawler(object):
                         value=country_code.upper(),
                         domain='.whoscored.com')
 
-        log.info('successfully created new session')
+        logger.info('successfully created new session')
 
         return ses
 
@@ -103,7 +103,7 @@ class WhoScoredCrawler(object):
         try:
             resp = self._session.get(url=cons.WHOSCORED_URL)
         except ConnectionError:
-            log.error('problems connecting to %s\n...ABORTING...' % cons.WHOSCORED_URL)
+            logger.error('problems connecting to %s\n...ABORTING...' % cons.WHOSCORED_URL)
             return []
 
         resp = re.sub('\n', '', resp.content.decode('utf-8'))
@@ -127,7 +127,7 @@ class WhoScoredCrawler(object):
                 leagues.append(league)
                 continue
 
-        log.info('successfully retrieved all leagues')
+        logger.info('successfully retrieved all leagues')
 
         return leagues
 
@@ -175,11 +175,11 @@ class WhoScoredCrawler(object):
         try:
             leagues_mp = self._crawl(urls=leagues_urls)
         except Exception as err:
-            log.error('failed to retrieve all leagues\' main pages')
-            log.error(err)
+            logger.error('failed to retrieve all leagues\' main pages')
+            logger.error(err)
             raise SystemExit
 
-        log.info('successfully retrieved all leagues\' main pages')
+        logger.info('successfully retrieved all leagues\' main pages')
 
         return leagues_mp
 
@@ -266,7 +266,7 @@ class WhoScoredCrawler(object):
             team['url'] = 'https://www.whoscored.com/Teams/{}/Show/{}-{}'.format(team['id'], item['teamRegionName'], team['name'])
             all_teams.append(team)
 
-        log.info('succesfully retrieved all teams\' ids and urls for league %s' % league['name'])
+        logger.info('succesfully retrieved all teams\' ids and urls for league %s' % league['name'])
 
         return all_teams
 
@@ -325,7 +325,7 @@ class WhoScoredCrawler(object):
             player['url'] = 'https://www.whoscored.com/Players/{}/Show/{}'.format(player['id'], player['name'])
             all_players.append(player)
 
-        log.info('succesfully retrieved all players\' ids and urls for team %s' % team['name'])
+        logger.info('successfully retrieved all players\' ids and urls for team %s' % team['name'])
 
         return all_players
 

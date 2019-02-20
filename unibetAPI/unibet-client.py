@@ -6,11 +6,12 @@ import datetime
 import hashlib
 import time
 
-from arbot import utils
-from arbot import session
-from arbot import fingerprint
+from utils import cons
+from utils import session
+from utils import fingerprint
+from utils import log
 
-logger = utils.get_logger()
+logger = log.get_logger()
 
 class BetClient(object):
     """Client for unibet"""
@@ -83,26 +84,11 @@ class BetClient(object):
     def max_bet(self):
         return self._max_bet
 
-    def _new_session(self, retry=False):
+    def _new_session(self):
         '''
-        :param retry: if False and function fails, it will call itself with retry=True
         :return: a new session configured with proxy of country = self._country_code
         '''
-
-        try:
-            proxy_url = utils.get_proxy_url(self._country_code)
-            ses = session.SessionFactory.build(
-                proxy_url, proxy_url,
-                {utils.USER_AGENT_TAG: self._user_agent}
-            )
-        except:
-            if not retry:
-                return self._new_session(retry=True)
-            else:
-                logger.error('check proxy configuration')
-                return False
-
-        return ses
+        return session.SessionFactory().build(headers={cons.USER_AGENT_TAG: self._user_agent}, proxy=True, country_code=self._country_code)
 
     def login(self, retry=False):
         '''
@@ -370,7 +356,7 @@ class BetClient(object):
 
         cbet = dict()
         cbet['ts'] = bet['placedDate'][8:10] + '/' + bet['placedDate'][5:7] + '/' + bet['placedDate'][0:4] + ' ' + bet['placedDate'][11:19]
-        cbet['ts'] = utils.str_to_ts(cbet['ts'])
+        cbet['ts'] = self._str_to_ts(cbet['ts'])
         cbet['bookmaker'] = self.bookmaker_name
         if not self._email:
             cbet['username'] = self._username
@@ -396,6 +382,10 @@ class BetClient(object):
             cbet['odds'] = float(bet['outcomes'][0]['playedOdds']) / 1000
             cbet['result'] = cbet['stake']
         return cbet
+
+    @staticmethod
+    def _str_to_ts(s, format='%d/%m/%Y %H:%M:%S'):
+        return time.mktime(datetime.datetime.strptime(s, format).timetuple())
 
     def get_balance(self, retry=False):
         '''
@@ -506,7 +496,7 @@ class BetClient(object):
         }
         today_ts = int(round(time.mktime(datetime.datetime.strptime(
                 str(datetime.datetime.today()).split('.')[0],'%Y-%m-%d %H:%M:%S').timetuple()) * 1000))
-        fromDate_ts = int(round(utils.str_to_ts(from_date, '%d/%m/%Y') * 1000))
+        fromDate_ts = int(round(self._str_to_ts(from_date, '%d/%m/%Y') * 1000))
         params = {
             'fromDate': fromDate_ts,
             'pageIndex': 0,
@@ -542,7 +532,7 @@ class BetClient(object):
         }
         today_ts = int(round(time.mktime(datetime.datetime.strptime(
                 str(datetime.datetime.today()).split('.')[0],'%Y-%m-%d %H:%M:%S').timetuple()) * 1000))
-        fromDate_ts = int(round(utils.str_to_ts(from_date, '%d/%m/%Y') * 1000))
+        fromDate_ts = int(round(self._str_to_ts(from_date, '%d/%m/%Y') * 1000))
         params = {
             'fromDate': fromDate_ts,
             'pageIndex': 0,
@@ -885,7 +875,6 @@ class BetClient(object):
                     if self._zero_bets >= 3:
                         msg = '{0} is limited to ZERO'.format(self._username)
                         logger.error(msg)
-                        utils.send_mail(utils.ALL_RECIPIENTS, msg, msg)
                         return 'account is limited'
                     else:
                         logger.info('{0} limit is ZERO for {1} bet'.format(self._username, options))
