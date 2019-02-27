@@ -277,8 +277,7 @@ class WhoScoredCrawler(object):
         """
         all_players = list()
 
-        headers = {'Referer': cons.WHOSCORED_URL}
-        resp = self._session.get(url=team['url'], headers=headers)
+        resp = self._session.get(url=team['url'])
         model_last_mode = self._get_header_value(resp)
 
         params = {
@@ -326,6 +325,7 @@ class WhoScoredCrawler(object):
             all_players.append(player)
 
         logger.info('successfully retrieved all players\' ids and urls for team %s' % team['name'])
+        self._clear_bad_cookies()
 
         return all_players
 
@@ -336,7 +336,17 @@ class WhoScoredCrawler(object):
         """
         return re.findall('\'Model-last-Mode\': \'(.*=)\' }', page.text)[0]
 
+    def _clear_bad_cookies(self):
+        """Clear bad cookies that crash the crawler
+        :return: None
+        """
+        val = self._session.cookies['ct']
+        self._session.cookies.clear()
+        self._session.cookies.set(name='ct',
+                        value=val,
+                        domain='.whoscored.com')
 
+        return
 
 
 
