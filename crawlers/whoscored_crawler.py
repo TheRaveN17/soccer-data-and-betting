@@ -13,6 +13,7 @@ from utils import cons
 from utils import session
 from utils import countries
 from utils import log
+from utils import util
 
 logger = log.get_logger()
 
@@ -348,14 +349,90 @@ class WhoScoredCrawler(object):
 
         return
 
+    def get_basic_player_info(self, players: list) -> list:
+        """Given a list of players and their urls, gather basic info about them, such as age, position, history, etc.
+        :param players: list
+        :return: list
+        """
+        detailed_players = list()
+        for player in players:
+            try:
+                dp = self._get_player_data(player=player)
+            except:
+                self._session = self._new_session(country_code='gb')
+                dp = self._get_player_data(player=player)
+            detailed_players.append(dp)
+
+        return detailed_players
+
+    def _get_player_data(self, player: dict) -> dict:
+        """Given a player with name and url, gather basic info about him
+        :param player: dict
+        :return: dict
+        """
+        resp = self._session.get(url=player['url'])
+        model_last_mode = self._get_header_value(page=resp)
+
+        params = {
+            'category': 'summary',
+            'subcategory': 'all',
+            'statsAccumulationType': '0',
+            'isCurrent': 'true',
+            'playerId': player['id'],
+            'teamIds': '',
+            'matchId': '',
+            'stageId': '',
+            'tournamentOptions': '',
+            'sortBy': 'Rating',
+            'sortAscending': '',
+            'age': '',
+            'ageComparisonType': '',
+            'appearances': '',
+            'appearancesComparisonType': '',
+            'field': 'Overall',
+            'nationality': '',
+            'positionOptions': '',
+            'timeOfTheGameStart': '',
+            'timeOfTheGameEnd': '',
+            'isMinApp': 'false',
+            'page': '',
+            'includeZeroValues': 'true',
+            'numberOfPlayersToPick': ''
+        }
+        headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Model-last-Mode': model_last_mode,
+            'Referer': player['url']
+        }
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+        items = resp['playerTableStats'][0]
+
+        player['position'] = items['positionText']
+        player['age'] = items['age']
+        player['height'] = items['height']
+        player['weight'] = items['weight']
+        player['playedPositions'] = items['playedPositions']
+        player['rating'] = items['rating']
+
+        logger.info('successfully retrieved info about %s' % player['name'])
+        self._clear_bad_cookies()
+
+        return player
+
 
 
 def main():
 
     crawler = WhoScoredCrawler(country_code='gb')
-    leagues = crawler.get_leagues()
-    leagues = crawler.select_leagues_by_region(leagues=leagues, region_name='Italy')
-    detailed_leagues = crawler.add_data(leagues=[leagues[0]])
+    # leagues = crawler.get_leagues()
+    # leagues = crawler.select_leagues_by_region(leagues=leagues, region_name='Italy')
+    # detailed_leagues = crawler.add_data(leagues=[leagues[0]])
+    # italy_players = detailed_leagues[0]['players']
+    # util.write_to_file('raw_italy_players', italy_players)
+    it_players = util.open_file('raw_italy_players')
+    detailed_players = crawler.get_basic_player_info(players=it_players)
+    util.write_to_file('italy_players', detailed_players)
 
 
 
