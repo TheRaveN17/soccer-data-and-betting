@@ -1,4 +1,4 @@
 .idea
 __pycache__
-crawlers/phx.log
+*.log
 database/*.db

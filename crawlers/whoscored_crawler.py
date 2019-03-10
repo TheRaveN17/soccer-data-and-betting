@@ -13,11 +13,10 @@ from utils import cons
 from utils import session
 from utils import countries
 from utils import log
-from utils import util
-
-logger = log.get_logger()
+from database import db
 
 
+logger = log.get_logger(logging_file='crawler.log')
 
 
 class WhoScoredCrawler(object):
@@ -158,9 +157,8 @@ class WhoScoredCrawler(object):
             nl = leagues[index]
             nl['teams'] = self._get_teams(league=leagues[index])
 
-            nl['players'] = list()
-            for team in nl['teams'][5: ]:
-                nl['players'] += self._get_players(team=team)
+            for team in nl['teams']:
+                team['players'] = self._get_players(team=team)
             detailed_leagues.append(nl)
 
         return detailed_leagues
@@ -413,7 +411,8 @@ class WhoScoredCrawler(object):
         player['height'] = items['height']
         player['weight'] = items['weight']
         player['playedPositions'] = items['playedPositions']
-        player['rating'] = items['rating']
+        player['rating'] = round(items['rating'], 2)
+        player.pop('id')
 
         logger.info('successfully retrieved info about %s' % player['name'])
         self._clear_bad_cookies()
@@ -423,18 +422,18 @@ class WhoScoredCrawler(object):
 
 
 def main():
-
     crawler = WhoScoredCrawler(country_code='gb')
-    # leagues = crawler.get_leagues()
-    # leagues = crawler.select_leagues_by_region(leagues=leagues, region_name='Italy')
-    # detailed_leagues = crawler.add_data(leagues=[leagues[0]])
-    # italy_players = detailed_leagues[0]['players']
-    # util.write_to_file('raw_italy_players', italy_players)
-    it_players = util.open_file('raw_italy_players')
-    detailed_players = crawler.get_basic_player_info(players=it_players)
-    util.write_to_file('italy_players', detailed_players)
-
-
+    italy_db = db.SoccerDatabase(name='Italy')
+    leagues = crawler.get_leagues()
+    leagues = crawler.select_leagues_by_region(leagues=leagues, region_name='Italy')
+    italy_league = crawler.add_data(leagues=[leagues[0]])
+    for team in italy_league[0]['teams'][:2]:
+        team['players'] = crawler.get_basic_player_info(players=team['players'])
+        italy_db.add_players(players_list=team['players'])
+        team.pop('id')
+        team.pop('leagueId')
+        team.pop('players')
+    italy_db.add_teams(teams_list=italy_league[0]['teams'][:2])
 
 if __name__ == '__main__':
     main()
