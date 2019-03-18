@@ -1,22 +1,25 @@
-from sqlalchemy import Column, Integer, Float, String, MetaData, Unicode, Table, ForeignKey
+from sqlalchemy import Column, Integer, Float, String, Unicode, ForeignKey
+from sqlalchemy.orm import relationship, backref
+from sqlalchemy.ext.declarative import declarative_base
 
-metadata = MetaData()
+Base = declarative_base()
 
-players = Table('players', metadata,
-    Column('player_id', Integer(), primary_key=True),
-    Column('team_id', ForeignKey('teams.team_id')),
-    Column('name', Unicode(50)),
-    Column('url', Unicode(100)),
-    Column('position', String(15)),
-    Column('playedPositions', String(15)),
-    Column('age', Integer()),
-    Column('height', Integer()),
-    Column('weight', Integer()),
-    Column('rating', Float(precision=2))
-)
+class Player(Base):
+    __tablename__ = 'players'
+    player_id = Column('player_id', Integer(), primary_key=True)
+    team_id = Column('team_id', ForeignKey('teams.team_id'))
+    name = Column('name', Unicode(50))
+    url = Column('url', Unicode(100))
+    position = Column('position', String(15))
+    played_positions = Column('played_positions', String(15))
+    age = Column('age', Integer())
+    height = Column('height', Integer())
+    weight = Column('weight', Integer())
+    rating = Column('rating', Float(precision=2))
+    team = relationship('Team', backref=backref('players', order_by=player_id))
 
-teams = Table('teams', metadata,
-    Column('team_id', Integer(), primary_key=True),
-    Column('name', Unicode(50)),
-    Column('url', Unicode(100))
-)
+class Team(Base):
+    __tablename__ = 'teams'
+    team_id = Column('team_id', Integer(), primary_key=True)
+    name = Column('name', Unicode(50))
+    url = Column('url', Unicode(100))

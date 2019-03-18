@@ -410,7 +410,7 @@ class WhoScoredCrawler(object):
         player['age'] = items['age']
         player['height'] = items['height']
         player['weight'] = items['weight']
-        player['playedPositions'] = items['playedPositions']
+        player['played_positions'] = items['playedPositions']
         player['rating'] = round(items['rating'], 2)
         player.pop('id')
 
@@ -427,13 +427,17 @@ def main():
     leagues = crawler.get_leagues()
     leagues = crawler.select_leagues_by_region(leagues=leagues, region_name='Italy')
     italy_league = crawler.add_data(leagues=[leagues[0]])
+    team_id = 1
     for team in italy_league[0]['teams'][:2]:
         team['players'] = crawler.get_basic_player_info(players=team['players'])
-        italy_db.add_players(players_list=team['players'])
+        for player in team['players']:
+            player['team_id'] = team_id
+        italy_db.add_players(players=team['players'])
         team.pop('id')
         team.pop('leagueId')
         team.pop('players')
-    italy_db.add_teams(teams_list=italy_league[0]['teams'][:2])
+        italy_db.add_team(team=team)
+        team_id += 1
 
 if __name__ == '__main__':
     main()

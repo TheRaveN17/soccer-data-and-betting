@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine
-from sqlalchemy.sql import select
+from sqlalchemy.orm import sessionmaker
 
 from utils import log
 from database import models
@@ -18,38 +18,56 @@ class SoccerDatabase(object):
 
         self._name = name
         engine = create_engine('sqlite:///../database/%s.db' % self._name)
-        models.metadata.create_all(engine)
-        self._connection = engine.connect()
+        models.Base.metadata.create_all(engine)
+        Session = sessionmaker(bind=engine)
+        self._session = Session()
 
-        logger.info('successfully connected to database %s' % self._name)
+        logger.info('successfully initialized database %s' % self._name)
 
-    def add_players(self, players_list: list):
+    def add_players(self, players: list):
         """Add players to database
         :param players_list: dicts with players
         """
-        ins = models.players.insert()
-        result = self._connection.execute(ins, players_list)
+        players_objs = list()
+        for player in players:
+            po = models.Player(team_id=player['team_id'],
+                                   name=player['name'],
+                                   url=player['url'],
+                                   position=player['position'],
+                                   played_positions=player['played_positions'],
+                                   age=player['age'],
+                                   height=player['height'],
+                                   weight=player['weight'],
+                                   rating=player['rating'])
+            players_objs.append(po)
+        self._session.bulk_save_objects(players_objs)
+        self._session.commit()
 
         logger.info('successfully added players to database %s' % self._name)
-        return result
 
-    def add_teams(self, teams_list: list):
+    def add_team(self, team: dict):
         """Add teams to database
         :param teams_list: dicts with teams
         """
-        ins = models.teams.insert()
-        result = self._connection.execute(ins, teams_list)
+        to = models.Team(name=team['name'],
+                             url=team['url'])
+        self._session.add(to)
+        self._session.commit()
 
         logger.info('successfully added teams to database %s' % self._name)
-        return result
 
     def get_players(self):
-        slct = select([models.players])
-        rp = self._connection.execute(slct)
-        return list(rp)
+        players = self._session.query(models.Player).all()
+        return players
+
+    def get_teams(self):
+        teams = self._session.query(models.Team).all()
+        return teams
 
 
 if __name__ == '__main__':
     italy_db = SoccerDatabase(name='Italy')
     pl = italy_db.get_players()
+    tl = italy_db.get_teams()
     print(pl)
+    print(tl)
