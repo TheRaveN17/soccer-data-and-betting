@@ -13,7 +13,6 @@ from utils import cons
 from utils import session
 from utils import countries
 from utils import log
-from database import db
 
 
 logger = log.get_logger(logging_file='crawler.log')
@@ -357,7 +356,7 @@ class WhoScoredCrawler(object):
             try:
                 dp = self._get_player_data(player=player)
             except:
-                self._session = self._new_session(country_code='gb')
+                self._session = self._new_session(country_code=self._country_code)
                 dp = self._get_player_data(player=player)
             detailed_players.append(dp)
 
@@ -368,7 +367,11 @@ class WhoScoredCrawler(object):
         :param player: dict
         :return: dict
         """
-        resp = self._session.get(url=player['url'])
+        try:
+            resp = self._session.get(url=player['url'], timeout=10)
+        except:
+            self._session = self._new_session(country_code=self._country_code)
+            return self._get_player_data(player=player)
         model_last_mode = self._get_header_value(page=resp)
 
         params = {
@@ -402,42 +405,21 @@ class WhoScoredCrawler(object):
             'Model-last-Mode': model_last_mode,
             'Referer': player['url']
         }
-        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        try:
+            resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers, timeout=10)
+        except:
+            self._session = self._new_session(country_code=self._country_code)
+            return self._get_player_data(player=player)
         resp = json.loads(resp.content.decode('utf-8'))
         items = resp['playerTableStats'][0]
 
-        player['position'] = items['positionText']
+        player['role'] = items['positionText']
         player['age'] = items['age']
         player['height'] = items['height']
         player['weight'] = items['weight']
         player['played_positions'] = items['playedPositions']
-        player['rating'] = round(items['rating'], 2)
-        player.pop('id')
 
         logger.info('successfully retrieved info about %s' % player['name'])
         self._clear_bad_cookies()
 
         return player
-
-
-
-def main():
-    crawler = WhoScoredCrawler(country_code='gb')
-    italy_db = db.SoccerDatabase(name='Italy')
-    leagues = crawler.get_leagues()
-    leagues = crawler.select_leagues_by_region(leagues=leagues, region_name='Italy')
-    italy_league = crawler.add_data(leagues=[leagues[0]])
-    team_id = 1
-    for team in italy_league[0]['teams'][:2]:
-        team['players'] = crawler.get_basic_player_info(players=team['players'])
-        for player in team['players']:
-            player['team_id'] = team_id
-        italy_db.add_players(players=team['players'])
-        team.pop('id')
-        team.pop('leagueId')
-        team.pop('players')
-        italy_db.add_team(team=team)
-        team_id += 1
-
-if __name__ == '__main__':
-    main()

@@ -24,50 +24,39 @@ class SoccerDatabase(object):
 
         logger.info('successfully initialized database %s' % self._name)
 
-    def add_players(self, players: list):
-        """Add players to database
-        :param players_list: dicts with players
-        """
-        players_objs = list()
-        for player in players:
-            po = models.Player(team_id=player['team_id'],
-                                   name=player['name'],
-                                   url=player['url'],
-                                   position=player['position'],
-                                   played_positions=player['played_positions'],
-                                   age=player['age'],
-                                   height=player['height'],
-                                   weight=player['weight'],
-                                   rating=player['rating'])
-            players_objs.append(po)
-        self._session.bulk_save_objects(players_objs)
-        self._session.commit()
-
-        logger.info('successfully added players to database %s' % self._name)
-
-    def add_team(self, team: dict):
-        """Add teams to database
-        :param teams_list: dicts with teams
+    def add_team_and_players(self, team: dict):
+        """Add team and it's players to database
+        :param team: team data, including current squad
         """
         to = models.Team(name=team['name'],
-                             url=team['url'])
+                         url=team['url'],
+                         players=list())
+        for player in team['players']:
+            po = models.Player(name=player['name'],
+                               url=player['url'],
+                               role=player['role'],
+                               played_positions=player['played_positions'],
+                               age=player['age'],
+                               height=player['height'],
+                               weight=player['weight'])
+            to.players.append(po)
+            self._session.add(po)
         self._session.add(to)
         self._session.commit()
 
-        logger.info('successfully added teams to database %s' % self._name)
-
-    def get_players(self):
-        players = self._session.query(models.Player).all()
-        return players
+        logger.info('successfully added team %s and squad to database %s' % (team['name'], self._name))
 
     def get_teams(self):
         teams = self._session.query(models.Team).all()
         return teams
 
+    def get_players(self):
+        players = self._session.query(models.Player).all()
+        return players
+
 
 if __name__ == '__main__':
     italy_db = SoccerDatabase(name='Italy')
-    pl = italy_db.get_players()
-    tl = italy_db.get_teams()
-    print(pl)
-    print(tl)
+    teams = italy_db.get_teams()
+    players = italy_db.get_players()
+    print('wow')
