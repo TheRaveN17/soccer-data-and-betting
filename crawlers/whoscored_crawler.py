@@ -374,32 +374,21 @@ class WhoScoredCrawler(object):
             return self._get_player_data(player=player)
         model_last_mode = self._get_header_value(page=resp)
 
-        params = {
-            'category': 'summary',
-            'subcategory': 'all',
-            'statsAccumulationType': '0',
-            'isCurrent': 'true',
-            'playerId': player['id'],
-            'teamIds': '',
-            'matchId': '',
-            'stageId': '',
-            'tournamentOptions': '',
-            'sortBy': 'Rating',
-            'sortAscending': '',
-            'age': '',
-            'ageComparisonType': '',
-            'appearances': '',
-            'appearancesComparisonType': '',
-            'field': 'Overall',
-            'nationality': '',
-            'positionOptions': '',
-            'timeOfTheGameStart': '',
-            'timeOfTheGameEnd': '',
-            'isMinApp': 'false',
-            'page': '',
-            'includeZeroValues': 'true',
-            'numberOfPlayersToPick': ''
-        }
+        params = cons.PLAYER_PARAMS
+        params['category'] = 'summary'
+        params['subcategory'] = 'all'
+        params['statsAccumulationType'] = '0'
+        params['isCurrent'] = 'true'
+        params['playerId'] = player['id']
+        params['sortBy'] = 'Rating'
+        params['field'] = 'Overall'
+        params['isMinApp'] = 'false'
+        params['ageComparisonType'] = ''
+        params['appearancesComparisonType'] = ''
+        params['positionOptions'] = ''
+        params['timeOfTheGameStart'] = ''
+        params['timeOfTheGameEnd'] = ''
+        params['page'] = ''
         headers = {
             'X-Requested-With': 'XMLHttpRequest',
             'Model-last-Mode': model_last_mode,
@@ -423,3 +412,350 @@ class WhoScoredCrawler(object):
         self._clear_bad_cookies()
 
         return player
+
+    def get_forward_data(self, forward: dict) -> dict:
+        """Get statistics for players that have the forward role
+        :param forward: player as stored in the database --> player['role'] == Forward
+        :return: forward with extra stats
+        """
+        history_url = re.sub('Show', 'History', forward['url'])
+        resp = self._session.get(url=history_url)
+        hv = self._get_header_value(page=resp)
+
+        forward = self._get_offensive_data(player=forward, model_last_mode=hv)
+        forward = self._get_aerial_data(player=forward, model_last_mode=hv)
+        forward = self._get_goals_data(player=forward, model_last_mode=hv)
+        forward = self._get_passing_data(player=forward, model_last_mode=hv)
+        forward = self._get_player_xp(player=forward, model_last_mode=hv)
+
+        logger.info('successfully retrieved forward stats for %s' % forward['name'])
+        return forward
+
+    def get_defender_data(self, defender: dict) -> dict:
+        """Get statistics for players that have the defender role
+        :param defender: player as stored in the database --> player['role'] == Defender
+        :return: defender with extra stats
+        """
+        history_url = re.sub('Show', 'History', defender['url'])
+        resp = self._session.get(url=history_url)
+        hv = self._get_header_value(page=resp)
+
+        defender = self._get_defensive_data(player=defender, model_last_mode=hv)
+        defender = self._get_aerial_data(player=defender, model_last_mode=hv)
+        defender = self._get_goals_data(player=defender, model_last_mode=hv)
+        self._session = self._new_session(country_code=self._country_code) #temporary bugfix
+        defender = self._get_passing_data(player=defender, model_last_mode=hv)
+        defender = self._get_player_xp(player=defender, model_last_mode=hv)
+
+        logger.info('successfully retrieved defender stats for %s' % defender['name'])
+        return defender
+
+    def get_midfielder_data(self, midfielder: dict) -> dict:
+        """Get statistics for players that have the defender role
+        :param midfielder: player as stored in the database --> player['role'] == Midfielder
+        :return: midfielder with extra stats
+        """
+        history_url = re.sub('Show', 'History', midfielder['url'])
+        resp = self._session.get(url=history_url)
+        hv = self._get_header_value(page=resp)
+
+        midfielder = self._get_offensive_data(player=midfielder, model_last_mode=hv)
+        midfielder = self._get_defensive_data(player=midfielder, model_last_mode=hv)
+        midfielder = self._get_aerial_data(player=midfielder, model_last_mode=hv)
+        self._session = self._new_session(country_code=self._country_code)  # temporary bugfix
+        midfielder = self._get_goals_data(player=midfielder, model_last_mode=hv)
+        midfielder = self._get_passing_data(player=midfielder, model_last_mode=hv)
+        midfielder = self._get_player_xp(player=midfielder, model_last_mode=hv)
+
+        logger.info('successfully retrieved midfielder stats for %s' % midfielder['name'])
+        return midfielder
+
+    def _get_player_xp(self, player: dict, model_last_mode: str) -> dict:
+        """Get player game experience
+        :param player: player as stored in the database
+        :param model_last_mode: header value necessary for the get request --> see self._get_header_value
+        :return: player with experience stats as total minutes played
+        !!! international experience counts as 1.3 * minutes played, second rate leagues experience counts as 0.7 * minutes played
+        """
+        params = cons.PLAYER_PARAMS
+        params['category'] = 'summary'
+        params['subcategory'] = 'all'
+        params['statsAccumulationType'] = '0'
+        params['playerId'] = re.findall('(\d.*\d)', player['url'])[0]
+        params['field'] = 'Overall'
+        params['isMinApp'] = 'false'
+        params['ageComparisonType'] = ''
+        params['appearancesComparisonType'] = ''
+        params['positionOptions'] = ''
+        params['timeOfTheGameStart'] = ''
+        params['timeOfTheGameEnd'] = ''
+        params['page'] = ''
+        headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Model-last-Mode': model_last_mode,
+            'Referer': re.sub('Show', 'History', player['url'])
+        }
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+
+        experience, apps = 0, 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            if item['tournamentName'] in cons.INTERNATIONAL_LEAGUES:
+                experience += 1.3 * item['minsPlayed']
+            elif item['tournamentName'] in cons.A_RATED_LEAGUES:
+                experience += item['minsPlayed']
+            else:
+                experience += 0.7 * item['minsPlayed']
+            apps += item['apps']
+        player['xp'] = int(experience)
+        player['apps'] = int(apps)
+
+        logger.info('successfully retrieved game experience for %s' % player['name'])
+        return player
+
+    def _get_offensive_data(self, player: dict, model_last_mode: str) -> dict:
+        """Gets shots taken player statistics
+        :param player: player as stored in the database
+        :param model_last_mode: header value necessary for the get request --> see self._get_header_value
+        :return: player with shots accuracy stats
+        """
+        params = cons.PLAYER_PARAMS
+        params['playerId'] = re.findall('(\d.*\d)', player['url'])[0]
+        headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Model-last-Mode': model_last_mode,
+            'Referer': re.sub('Show', 'History', player['url'])
+        }
+
+        params['category'] = 'shots'
+        params['subcategory'] = 'accuracy'
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+        son, sof, sb, sp = 0, 0, 0, 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            son += item['shotOnTarget']
+            sof += item['shotOffTarget']
+            sb += item['shotBlocked']
+            sp += item['shotOnPost']
+        player['shotsOnTarget'] = int(son)
+        player['shotsOffTarget'] = int(sof)
+        player['shotsBlocked'] = int(sb)
+        player['shotsPost'] = int(sp)
+
+        params['category'] = 'dribbles'
+        params['subcategory'] = 'success'
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+        td, sd = 0, 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            sd += item['dribbleWon']
+            td += item['dribbleTotal']
+        player['dribbling'] = round(sd / td * 100, 2)
+
+        logger.info('successfully retrieved offensive stats for %s' % player['name'])
+        return player
+
+    def _get_goals_data(self, player: dict, model_last_mode: str) -> dict:
+        """Gets goals scored player statistics
+        :param player: player as stored in the database
+        :param model_last_mode: header value necessary for the get request --> see self._get_header_value
+        :return: player with goals scored stats
+        """
+        params = cons.PLAYER_PARAMS
+        params['category'] = 'goals'
+        params['subcategory'] = 'situations'
+        params['playerId'] = re.findall('(\d.*\d)', player['url'])[0]
+        headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Model-last-Mode': model_last_mode,
+            'Referer': re.sub('Show', 'History', player['url'])
+        }
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+
+        g, spg = 0, 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            g += item['goalNormal']
+            spg += item['goalSetPiece']
+        player['goals'] = int(g)
+        player['setPieceGoals'] = int(spg)
+
+        logger.info('successfully retrieved goals scored for %s' % player['name'])
+        return player
+
+    def _get_passing_data(self, player: dict, model_last_mode: str) -> dict:
+        """Gets player passing statistics
+        :param player: player as stored in the database
+        :param model_last_mode: header value necessary for the get request --> see self._get_header_value
+        :return: player with passing data added
+        """
+        params = cons.PLAYER_PARAMS
+        params['playerId'] = re.findall('(\d.*\d)', player['url'])[0]
+        headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Model-last-Mode': model_last_mode,
+            'Referer': re.sub('Show', 'History', player['url'])
+        }
+
+        params['category'] = 'passes'
+        params['subcategory'] = 'length'
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+        alp, ilp, asp, isp = 0, 0, 0, 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            alp += item['passLongBallAccurate']
+            ilp += item['passLongBallInaccurate']
+            asp += item['shortPassAccurate']
+            isp += item['shortPassInaccurate']
+        player['shortPassAccuracy'] = round(asp / (asp + isp) * 100, 2)
+        player['longPassAccuracy'] = round(alp / (alp + ilp) * 100, 2)
+
+        params['subcategory'] = 'type'
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+        ac, ic = 0, 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            ac += item['passCrossAccurate']
+            ic += item['passCrossInaccurate']
+        player['totalCrosses'] = int(ac + ic)
+        player['crossAccuracy'] = round(ac / player['totalCrosses'] * 100, 2)
+
+        params['category'] = 'key-passes'
+        params['subcategory'] = 'length'
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+        kp = 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            kp += item['keyPassesTotal']
+        player['keyPasses'] = int(kp)
+
+        params['category'] = 'assists'
+        params['subcategory'] = 'type'
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+        a = 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            a += item['assist']
+        player['assists'] = int(a)
+
+        logger.info('successfully retrieved passing stats for %s' % player['name'])
+        return player
+
+    def _get_aerial_data(self, player: dict, model_last_mode: str) -> dict:
+        """Gets aerial player statistics
+        :param player: player as stored in the database
+        :param model_last_mode: header value necessary for the get request --> see self._get_header_value
+        :return: player with aerial stats
+        """
+        params = cons.PLAYER_PARAMS
+        params['category'] = 'aerial'
+        params['subcategory'] = 'success'
+        params['playerId'] = re.findall('(\d.*\d)', player['url'])[0]
+        headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Model-last-Mode': model_last_mode,
+            'Referer': re.sub('Show', 'History', player['url'])
+        }
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+
+        won, lost = 0, 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            won += item['duelAerialWon']
+            lost += item['duelAerialLost']
+        player['aerial'] = round(won / (won + lost) * 100, 2)
+
+        logger.info('successfully retrieved aerial data for %s' % player['name'])
+        return player
+
+    def _get_defensive_data(self, player: dict, model_last_mode: str) -> dict:
+        """Gets tackling player statistics
+        :param player: player as stored in the database
+        :param model_last_mode: header value necessary for the get request --> see self._get_header_value
+        :return: player with tackling stats
+        """
+        params = cons.PLAYER_PARAMS
+        params['playerId'] = re.findall('(\d.*\d)', player['url'])[0]
+        headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Model-last-Mode': model_last_mode,
+            'Referer': re.sub('Show', 'History', player['url'])
+        }
+
+        params['category'] = 'tackles'
+        params['subcategory'] = 'success'
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+        st, dp = 0, 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            st += item['tackleWonTotal']
+            dp += item['challengeLost']
+        player['tackling'] = round(st / (st + dp) * 100, 2)
+
+        params['category'] = 'interception'
+        params['subcategory'] = 'success'
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+        interceptions = 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            interceptions += item['interceptionAll']
+        player['interceptions'] = int(interceptions)
+
+        params['category'] = 'clearances'
+        params['subcategory'] = 'success'
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+        clearances = 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            clearances += item['clearanceTotal']
+        player['clearances'] = int(clearances)
+
+        params['category'] = 'blocks'
+        params['subcategory'] = 'type'
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+        sb, cb, pb = 0, 0, 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            sb += item['outfielderBlock']
+            cb += item['passCrossBlockedDefensive']
+            pb += item['outfielderBlockedPass']
+        player['shotsBlocked'] = int(sb)
+        player['crossesBlocked'] = int(cb)
+        player['passesBlocked'] = int(pb)
+
+        logger.info('successfully defensive data for %s' % player['name'])
+        return player
+
+
+if __name__ == '__main__':
+    crawler = WhoScoredCrawler(country_code='gb')
+    plr = dict()
+    plr['url'] = 'https://www.whoscored.com/Players/30226/Show/Miralem-Pjanic'
+    plr['name'] = 'Miralem-Pjanic'
+    plr = crawler.get_midfielder_data(midfielder=plr)
