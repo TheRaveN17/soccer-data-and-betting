@@ -25,6 +25,8 @@ class Team(Base):
 
 class Defender(Base):
     __tablename__ = 'defender'
+    id = Column('id', Integer(), primary_key=True)
+    player_id = Column('player_id', ForeignKey('player.id'))
     xp = Column('xp', Integer())
     apps = Column('apps', Integer())
     tackling = Column('tackling', Float(precision=2))
@@ -45,6 +47,8 @@ class Defender(Base):
 
 class Midfielder(Base):
     __tablename__ = 'midfielder'
+    id = Column('id', Integer(), primary_key=True)
+    player_id = Column('player_id', ForeignKey('player.id'))
     xp = Column('xp', Integer())
     apps = Column('apps', Integer())
     shotsOnTarget = Column('shotsOnTarget', Integer())
@@ -70,6 +74,8 @@ class Midfielder(Base):
 
 class Forward(Base):
     __tablename__ = 'forward'
+    id = Column('id', Integer(), primary_key=True)
+    player_id = Column('player_id', ForeignKey('player.id'))
     xp = Column('xp', Integer())
     apps = Column('apps', Integer())
     shotsOnTarget = Column('shotsOnTarget', Integer())
@@ -87,3 +93,15 @@ class Forward(Base):
     keyPasses = ('keyPasses', Integer())
     assists = Column('assists', Integer())
     player = relationship(Player, backref=backref('forward', uselist=False))
+
+class Goalkeeper(Base):
+    __tablename__ = 'goalkeeper'
+    id = Column('id', Integer(), primary_key=True)
+    player_id = Column('player_id', ForeignKey('player.id'))
+    xp = Column('xp', Integer())
+    apps = Column('apps', Integer())
+    clearances = Column('clearances', Integer())
+    savesOutOfBox = Column('savesOutOfBox', Integer())
+    savesPenaltyArea = Column('savesPenaltyArea', Integer())
+    savesSixYardBox = Column('savesSixYardBox', Integer())
+    player = relationship(Player, backref=backref('goalkeeper', uselist=False))
