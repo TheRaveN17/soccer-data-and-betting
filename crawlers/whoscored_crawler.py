@@ -413,7 +413,89 @@ class WhoScoredCrawler(object):
 
         return player
 
-    def get_forward_data(self, forward: dict) -> dict:
+    def update_players(self, players: list) -> list:
+        """Call self._player_stats_by_role for all players provided
+        :param players: as stored in the database (player[n][role] = role)
+        :return: updated players
+        """
+        for player in players:
+            self._player_stats_by_role(player=player)
+
+        return players
+
+    def _player_stats_by_role(self, player: dict) -> dict:
+        """Get statistics for player by his role (Defender, Midfielder, Forward, Goalkeeper)
+        :param player: as stored in the database (player[n][role] = role)
+        :return: updated player
+        """
+        try:
+            if player['role']  == 'Defender':
+                self._get_defender_stats(defender=player)
+            elif player['role']  == 'Midfielder':
+                self._get_midfielder_stats(midfielder=player)
+            elif player['role']  == 'Forward':
+                self._get_forward_stats(forward=player)
+            elif player['role']  == 'Goalkeeper':
+                self._get_goalkeeper_stats(goalkeeper=player)
+            else:
+                logger.error('player %s has no role assigned' % player['name'])
+        except:
+            self._session = self._new_session(country_code=self._country_code)
+            return self._player_stats_by_role(player=player)
+
+        return player
+
+    def _get_goalkeeper_stats(self, goalkeeper: dict) -> dict:
+        """Get statistics for players that have the goalkeeper role
+        :param goalkeeper: player as stored in the database --> player['role'] == Goalkeeper
+        :return: goalkeeper with extra stats
+        """
+        history_url = re.sub('Show', 'History', goalkeeper['url'])
+        resp = self._session.get(url=history_url)
+        model_last_mode = self._get_header_value(page=resp)
+
+        params = cons.PLAYER_PARAMS
+        params['category'] = 'saves'
+        params['subcategory'] = 'shotzone'
+        params['playerId'] = re.findall('(\d.*\d)', goalkeeper['url'])[0]
+        headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Model-last-Mode': model_last_mode,
+            'Referer': re.sub('Show', 'History', goalkeeper['url'])
+        }
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+
+        saveObox, savePenaltyArea, saveSixYardBox = 0, 0, 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            saveObox += item['saveObox']
+            savePenaltyArea += item['savePenaltyArea']
+            saveSixYardBox += item['saveSixYardBox']
+        goalkeeper['savesSixYardBox'] = int(saveSixYardBox)
+        goalkeeper['savesPenaltyArea'] = int(savePenaltyArea)
+        goalkeeper['savesOutOfBox'] = int(saveObox)
+
+        params['category'] = 'clearances'
+        params['subcategory'] = 'success'
+        resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
+        resp = json.loads(resp.content.decode('utf-8'))
+        clearances = 0
+        for item in resp['playerTableStats']:
+            if item['seasonName'] == cons.FIRST_IRRELEVANT_SEASON:
+                break
+            clearances += item['clearanceTotal']
+        goalkeeper['clearances'] = int(clearances)
+
+        goalkeeper = self._get_aerial_data(player=goalkeeper, model_last_mode=model_last_mode)
+        goalkeeper = self._get_player_xp(player=goalkeeper, model_last_mode=model_last_mode)
+        self._clear_bad_cookies()
+
+        logger.info('successfully retrieved forward stats for %s' % goalkeeper['name'])
+        return goalkeeper
+
+    def _get_forward_stats(self, forward: dict) -> dict:
         """Get statistics for players that have the forward role
         :param forward: player as stored in the database --> player['role'] == Forward
         :return: forward with extra stats
@@ -427,11 +509,12 @@ class WhoScoredCrawler(object):
         forward = self._get_goals_data(player=forward, model_last_mode=hv)
         forward = self._get_passing_data(player=forward, model_last_mode=hv)
         forward = self._get_player_xp(player=forward, model_last_mode=hv)
+        self._clear_bad_cookies()
 
         logger.info('successfully retrieved forward stats for %s' % forward['name'])
         return forward
 
-    def get_defender_data(self, defender: dict) -> dict:
+    def _get_defender_stats(self, defender: dict) -> dict:
         """Get statistics for players that have the defender role
         :param defender: player as stored in the database --> player['role'] == Defender
         :return: defender with extra stats
@@ -443,14 +526,15 @@ class WhoScoredCrawler(object):
         defender = self._get_defensive_data(player=defender, model_last_mode=hv)
         defender = self._get_aerial_data(player=defender, model_last_mode=hv)
         defender = self._get_goals_data(player=defender, model_last_mode=hv)
-        self._session = self._new_session(country_code=self._country_code) #temporary bugfix
+        self._clear_bad_cookies()
         defender = self._get_passing_data(player=defender, model_last_mode=hv)
         defender = self._get_player_xp(player=defender, model_last_mode=hv)
+        self._clear_bad_cookies()
 
         logger.info('successfully retrieved defender stats for %s' % defender['name'])
         return defender
 
-    def get_midfielder_data(self, midfielder: dict) -> dict:
+    def _get_midfielder_stats(self, midfielder: dict) -> dict:
         """Get statistics for players that have the defender role
         :param midfielder: player as stored in the database --> player['role'] == Midfielder
         :return: midfielder with extra stats
@@ -462,10 +546,11 @@ class WhoScoredCrawler(object):
         midfielder = self._get_offensive_data(player=midfielder, model_last_mode=hv)
         midfielder = self._get_defensive_data(player=midfielder, model_last_mode=hv)
         midfielder = self._get_aerial_data(player=midfielder, model_last_mode=hv)
-        self._session = self._new_session(country_code=self._country_code)  # temporary bugfix
+        self._clear_bad_cookies()
         midfielder = self._get_goals_data(player=midfielder, model_last_mode=hv)
         midfielder = self._get_passing_data(player=midfielder, model_last_mode=hv)
         midfielder = self._get_player_xp(player=midfielder, model_last_mode=hv)
+        self._clear_bad_cookies()
 
         logger.info('successfully retrieved midfielder stats for %s' % midfielder['name'])
         return midfielder
@@ -751,11 +836,3 @@ class WhoScoredCrawler(object):
 
         logger.info('successfully defensive data for %s' % player['name'])
         return player
-
-
-if __name__ == '__main__':
-    crawler = WhoScoredCrawler(country_code='gb')
-    plr = dict()
-    plr['url'] = 'https://www.whoscored.com/Players/30226/Show/Miralem-Pjanic'
-    plr['name'] = 'Miralem-Pjanic'
-    plr = crawler.get_midfielder_data(midfielder=plr)
