@@ -439,7 +439,8 @@ class WhoScoredCrawler(object):
                 self._get_goalkeeper_stats(goalkeeper=player)
             else:
                 logger.error('player %s has no role assigned' % player['name'])
-        except:
+        except Exception as err:
+            logger.error(err)
             self._session = self._new_session(country_code=self._country_code)
             return self._player_stats_by_role(player=player)
 
@@ -525,8 +526,8 @@ class WhoScoredCrawler(object):
 
         defender = self._get_defensive_data(player=defender, model_last_mode=hv)
         defender = self._get_aerial_data(player=defender, model_last_mode=hv)
-        defender = self._get_goals_data(player=defender, model_last_mode=hv)
         self._clear_bad_cookies()
+        defender = self._get_goals_data(player=defender, model_last_mode=hv)
         defender = self._get_passing_data(player=defender, model_last_mode=hv)
         defender = self._get_player_xp(player=defender, model_last_mode=hv)
         self._clear_bad_cookies()
@@ -641,7 +642,10 @@ class WhoScoredCrawler(object):
                 break
             sd += item['dribbleWon']
             td += item['dribbleTotal']
-        player['dribbling'] = round(sd / td * 100, 2)
+        if td == 0:
+            player['dribbling'] = 0.0
+        else:
+            player['dribbling'] = round(sd / td * 100, 2)
 
         logger.info('successfully retrieved offensive stats for %s' % player['name'])
         return player
@@ -702,8 +706,14 @@ class WhoScoredCrawler(object):
             ilp += item['passLongBallInaccurate']
             asp += item['shortPassAccurate']
             isp += item['shortPassInaccurate']
-        player['shortPassAccuracy'] = round(asp / (asp + isp) * 100, 2)
-        player['longPassAccuracy'] = round(alp / (alp + ilp) * 100, 2)
+        if asp == 0:
+            player['shortPassAccuracy'] = 0.0
+        else:
+            player['shortPassAccuracy'] = round(asp / (asp + isp) * 100, 2)
+        if alp == 0:
+            player['longPassAccuracy'] = 0.0
+        else:
+            player['longPassAccuracy'] = round(alp / (alp + ilp) * 100, 2)
 
         params['subcategory'] = 'type'
         resp = self._session.get(url=cons.PLAYER_STATS_URL, params=params, headers=headers)
@@ -714,8 +724,12 @@ class WhoScoredCrawler(object):
                 break
             ac += item['passCrossAccurate']
             ic += item['passCrossInaccurate']
-        player['totalCrosses'] = int(ac + ic)
-        player['crossAccuracy'] = round(ac / player['totalCrosses'] * 100, 2)
+        if ac == 0:
+            player['totalCrosses'] = int(ac + ic)
+            player['crossAccuracy'] = 0.0
+        else:
+            player['totalCrosses'] = int(ac + ic)
+            player['crossAccuracy'] = round(ac / player['totalCrosses'] * 100, 2)
 
         params['category'] = 'key-passes'
         params['subcategory'] = 'length'
@@ -766,7 +780,10 @@ class WhoScoredCrawler(object):
                 break
             won += item['duelAerialWon']
             lost += item['duelAerialLost']
-        player['aerial'] = round(won / (won + lost) * 100, 2)
+        if won == 0:
+            player['aerial'] = 0.0
+        else:
+            player['aerial'] = round(won / (won + lost) * 100, 2)
 
         logger.info('successfully retrieved aerial data for %s' % player['name'])
         return player
@@ -795,7 +812,10 @@ class WhoScoredCrawler(object):
                 break
             st += item['tackleWonTotal']
             dp += item['challengeLost']
-        player['tackling'] = round(st / (st + dp) * 100, 2)
+        if st == 0:
+            player['tackling'] = 0.0
+        else:
+            player['tackling'] = round(st / (st + dp) * 100, 2)
 
         params['category'] = 'interception'
         params['subcategory'] = 'success'
@@ -834,5 +854,5 @@ class WhoScoredCrawler(object):
         player['crossesBlocked'] = int(cb)
         player['passesBlocked'] = int(pb)
 
-        logger.info('successfully defensive data for %s' % player['name'])
+        logger.info('successfully retrieved defensive data for %s' % player['name'])
         return player
