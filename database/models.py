@@ -43,7 +43,7 @@ class Defender(Base):
     crossAccuracy = Column('crossAccuracy', Float(precision=2))
     keyPasses = ('keyPasses', Integer())
     assists = Column('assists', Integer())
-    player = relationship(Player, backref=backref('defender', uselist=False))
+    player = relationship(Player, uselist=False)
 
 class Midfielder(Base):
     __tablename__ = 'midfielder'
@@ -70,7 +70,7 @@ class Midfielder(Base):
     crossAccuracy = Column('crossAccuracy', Float(precision=2))
     keyPasses = ('keyPasses', Integer())
     assists = Column('assists', Integer())
-    player = relationship(Player, backref=backref('midfielder', uselist=False))
+    player = relationship(Player, uselist=False)
 
 class Forward(Base):
     __tablename__ = 'forward'
@@ -92,7 +92,7 @@ class Forward(Base):
     crossAccuracy = Column('crossAccuracy', Float(precision=2))
     keyPasses = ('keyPasses', Integer())
     assists = Column('assists', Integer())
-    player = relationship(Player, backref=backref('forward', uselist=False))
+    player = relationship(Player, uselist=False)
 
 class Goalkeeper(Base):
     __tablename__ = 'goalkeeper'
@@ -101,7 +101,8 @@ class Goalkeeper(Base):
     xp = Column('xp', Integer())
     apps = Column('apps', Integer())
     clearances = Column('clearances', Integer())
+    aerial = Column('aerial', Float(precision=2))
     savesOutOfBox = Column('savesOutOfBox', Integer())
     savesPenaltyArea = Column('savesPenaltyArea', Integer())
     savesSixYardBox = Column('savesSixYardBox', Integer())
-    player = relationship(Player, backref=backref('goalkeeper', uselist=False))
+    player = relationship(Player, uselist=False)

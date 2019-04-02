@@ -29,3 +29,15 @@ def open_file(filename):
     except Exception as err:
         print(err)
         return False
+
+def plr_obj_to_dict(players: list) -> list:
+    plrs_dicts = list()
+    for player in players:
+        plr = dict()
+        plr['playerObj'] = player
+        plr['url'] = player.url
+        plr['role'] = player.role
+        plr['name'] = player.name
+        plrs_dicts.append(plr)
+
+    return plrs_dicts
