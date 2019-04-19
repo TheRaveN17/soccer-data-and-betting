@@ -1,4 +1,5 @@
 import pickle
+import json
 
 def write_to_file(filename, data):
     '''
@@ -41,3 +42,24 @@ def plr_obj_to_dict(players: list) -> list:
         plrs_dicts.append(plr)
 
     return plrs_dicts
+
+def players_objects_to_dicts(players: list) -> list:
+    dicts = list()
+    for player in players:
+        nd1 = vars(player.player)
+        nd2 = vars(player)
+        nd = {**nd1, **nd2}
+        nd.pop('_sa_instance_state')
+        nd.pop('player')
+        nd.pop('team_id')
+        nd.pop('id')
+        nd.pop('player_id')
+        dicts.append(nd)
+
+    return dicts
+
+def players_to_json(players: list, filename: str):
+    with open('%s.json' % filename, 'w') as fp:
+        json.dump(players, fp, sort_keys=True, indent=4)
+
+    return True
