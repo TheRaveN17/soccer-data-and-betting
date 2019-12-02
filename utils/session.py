@@ -48,6 +48,6 @@ class SessionFactory(object):
         """
         proxy_ip = socket.gethostbyname('servercountry-gb.zproxy.luminati.io')
         rand = str(uuid.uuid4()).replace('-', '')
-        return 'http://lum-customer-marianrus-zone-residential-' \
+        return 'http://your_proxy-' \
                'country-{0}-dns-remote-session-{1}:339d479bc57f@{2}:22225'.format(
             country_code, rand, proxy_ip)

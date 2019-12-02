@@ -1,5 +1,8 @@
 import pickle
 import json
+import time
+import datetime
+import random
 
 def write_to_file(filename, data):
     '''
@@ -63,3 +66,24 @@ def players_to_json(players: list, filename: str):
         json.dump(players, fp, sort_keys=True, indent=4)
 
     return True
+
+def str_to_ts(s, format='%d/%m/%Y %H:%M:%S'):
+    return time.mktime(
+        datetime.datetime.strptime(s, format).timetuple()
+    )
+
+def rand_stake(stake, limit, interval):
+    """Randomizes stake between (stake, stake - 2) with 0.5 interval
+    :param stake: float > 0
+    :param limit: stake - limit -> lowest possible stake to be returned > zero
+    :param interval: float representing the increments between stake and stake - limit
+    :return: new stake to be used in placing bet
+    """
+    possible_stakes = list()
+    max_possible_stakes = (stake - (stake - limit)) / interval
+    while stake > 0:
+        possible_stakes.append(stake)
+        stake -= interval
+        if len(possible_stakes) > max_possible_stakes:
+            break
+    return random.choice(possible_stakes)

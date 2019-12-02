@@ -27,6 +27,10 @@ resolutions = [
     [1280, 720]
 ]
 
+def get_resolution(username):
+    s = sum(ord(c) for c in username)
+    return resolutions[s % len(resolutions)]
+
 def lshift(val, n):
 
     return ctypes.c_int(val << n ^ 0).value
