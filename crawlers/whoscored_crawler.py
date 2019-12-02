@@ -464,6 +464,7 @@ class WhoScoredCrawler(object):
                 logger.error('player %s has no role assigned' % player['name'])
         except Exception as err:
             self._session = self._new_session(country_code=self._country_code)
+            logger.error(err)
             return self._player_stats_by_role(player=player)
 
         return player
@@ -618,7 +619,6 @@ class WhoScoredCrawler(object):
     def _get_offensive_data(self, player: dict) -> dict:
         """Gets shots taken player statistics
         :param player: player as stored in the database
-        :param model_last_mode: header value necessary for the get request --> see self._get_header_value
         :return: player with shots accuracy stats
         """
         params = cons.PLAYER_PARAMS
@@ -668,7 +668,6 @@ class WhoScoredCrawler(object):
     def _get_goals_data(self, player: dict) -> dict:
         """Gets goals scored player statistics
         :param player: player as stored in the database
-        :param model_last_mode: header value necessary for the get request --> see self._get_header_value
         :return: player with goals scored stats
         """
         params = cons.PLAYER_PARAMS
@@ -697,7 +696,6 @@ class WhoScoredCrawler(object):
     def _get_passing_data(self, player: dict) -> dict:
         """Gets player passing statistics
         :param player: player as stored in the database
-        :param model_last_mode: header value necessary for the get request --> see self._get_header_value
         :return: player with passing data added
         """
         params = cons.PLAYER_PARAMS
@@ -774,7 +772,6 @@ class WhoScoredCrawler(object):
     def _get_aerial_data(self, player: dict) -> dict:
         """Gets aerial player statistics
         :param player: player as stored in the database
-        :param model_last_mode: header value necessary for the get request --> see self._get_header_value
         :return: player with aerial stats
         """
         params = cons.PLAYER_PARAMS
@@ -807,7 +804,6 @@ class WhoScoredCrawler(object):
     def _get_defensive_data(self, player: dict) -> dict:
         """Gets tackling player statistics
         :param player: player as stored in the database
-        :param model_last_mode: header value necessary for the get request --> see self._get_header_value
         :return: player with tackling stats
         """
         params = cons.PLAYER_PARAMS
